@@ -6,6 +6,9 @@ class Settings(BaseSettings):
 
     app_name: str = 'PolyClaw'
     database_url: str = 'sqlite:///./polyclaw.db'
+    market_source: str = 'sample'
+    polymarket_gamma_url: str = 'https://gamma-api.polymarket.com/markets'
+    request_timeout_seconds: int = 20
 
     execution_mode: str = 'paper'
     require_approval: bool = True

@@ -14,6 +14,7 @@ PolyClaw is a practical MVP for a **Polymarket auto-analysis + guarded execution
 ## Features
 
 - Pluggable providers for markets, evidence, and execution
+- Real Polymarket Gamma market ingestion with sample fallback
 - SQLite persistence via SQLAlchemy
 - FastAPI service for health, scans, decisions, approvals, and positions
 - Risk engine with stale data checks, spread/liquidity thresholds, exposure caps, and confidence floors
@@ -66,6 +67,15 @@ polyclaw tick
 - `LIVE_TRADING_ENABLED=false`
 
 To move toward automation, first disable approval in **paper mode**, review behavior, and only later add a real executor implementation.
+
+## Important environment variables
+
+- `MARKET_SOURCE=sample|polymarket`
+- `POLYMARKET_GAMMA_URL=https://gamma-api.polymarket.com/markets`
+- `REQUEST_TIMEOUT_SECONDS=20`
+- `EXECUTION_MODE=paper|live`
+- `REQUIRE_APPROVAL=true|false`
+- `AUTO_EXECUTE=true|false`
 
 ## Suggested next steps
 
