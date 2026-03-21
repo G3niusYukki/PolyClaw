@@ -41,3 +41,20 @@ class RankedMarketOut(BaseModel):
     liquidity_usd: float
     volume_24h_usd: float
     spread_bps: int
+
+
+class ProposalPreviewOut(BaseModel):
+    market_id: str
+    title: str
+    rank_score: float
+    ranking_reasons: list[str]
+    evidence_summaries: list[str]
+    suggested_side: str
+    confidence: float
+    model_probability: float
+    market_implied_probability: float
+    edge_bps: int
+    suggested_stake_usd: float
+    explanation: str
+    risk_flags: list[str]
+    should_trade: bool

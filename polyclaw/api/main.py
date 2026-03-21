@@ -2,9 +2,10 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from polyclaw.config import settings
 from polyclaw.db import Base, engine, get_session
 from polyclaw.models import Decision, Market, Position, AuditLog
-from polyclaw.schemas import ApprovalResponse, DecisionOut, RankedMarketOut, RunnerTickResponse, ScanResponse
+from polyclaw.schemas import ApprovalResponse, DecisionOut, ProposalPreviewOut, RankedMarketOut, RunnerTickResponse, ScanResponse
 from polyclaw.services.analysis import AnalysisService
 from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
@@ -50,6 +51,30 @@ def candidates(limit: int = 10):
     ]
 
 
+@app.get('/proposals', response_model=list[ProposalPreviewOut])
+def proposals(limit: int = 10, session: Session = Depends(get_session)):
+    previews = analysis_service.proposal_previews(session, limit=limit)
+    return [
+        ProposalPreviewOut(
+            market_id=item.market.market_id,
+            title=item.market.title,
+            rank_score=item.rank_score,
+            ranking_reasons=item.ranking_reasons,
+            evidence_summaries=[e.summary for e in item.evidences],
+            suggested_side=item.suggested_side,
+            confidence=item.confidence,
+            model_probability=item.model_probability,
+            market_implied_probability=item.market_implied_probability,
+            edge_bps=item.edge_bps,
+            suggested_stake_usd=item.suggested_stake_usd,
+            explanation=item.explanation,
+            risk_flags=item.risk_flags,
+            should_trade=item.should_trade,
+        )
+        for item in previews
+    ]
+
+
 @app.get('/decisions', response_model=list[DecisionOut])
 def list_decisions(session: Session = Depends(get_session)):
     rows = session.execute(select(Decision, Market.title).join(Market, Decision.market_id_fk == Market.id).order_by(Decision.created_at.desc())).all()
@@ -71,6 +96,33 @@ def list_decisions(session: Session = Depends(get_session)):
         )
         for decision, title in rows
     ]
+
+
+@app.post('/proposals/{market_id}/materialize', response_model=ScanResponse)
+def materialize_proposal(market_id: str, session: Session = Depends(get_session)):
+    previews = analysis_service.proposal_previews(session, limit=settings.scan_limit)
+    match = next((p for p in previews if p.market.market_id == market_id and p.should_trade), None)
+    if not match:
+        raise HTTPException(status_code=404, detail='tradable_proposal_not_found')
+    from polyclaw.domain import DecisionProposal
+    from polyclaw.repositories import upsert_market, replace_evidence, create_decision
+    market_record = next((m for m in session.scalars(select(Market).where(Market.market_id == market_id)).all()), None)
+    if market_record is None:
+        market_record = upsert_market(session, match.market)
+    replace_evidence(session, market_record, match.evidences)
+    proposal = DecisionProposal(
+        side=match.suggested_side,
+        confidence=match.confidence,
+        model_probability=match.model_probability,
+        market_implied_probability=match.market_implied_probability,
+        edge_bps=match.edge_bps,
+        stake_usd=match.suggested_stake_usd,
+        explanation=match.explanation,
+        risk_flags=match.risk_flags,
+    )
+    create_decision(session, market_record, proposal, requires_approval=settings.require_approval)
+    session.commit()
+    return ScanResponse(markets_scanned=1, decisions_created=1)
 
 
 @app.post('/decisions/{decision_id}/approve', response_model=ApprovalResponse)

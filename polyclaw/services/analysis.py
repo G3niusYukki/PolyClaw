@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from polyclaw.config import settings
 from polyclaw.evidence import HeuristicEvidenceEngine
+from polyclaw.proposals import ProposalPreview
 from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
 from polyclaw.providers.sample_market import SampleMarketProvider
 from polyclaw.ranking import MarketRanker
@@ -63,3 +64,48 @@ class AnalysisService:
             markets = SampleMarketProvider().list_markets(limit=settings.scan_limit)
         ranked = self.ranker.rank(markets, limit=limit or settings.scan_limit)
         return ranked
+
+    def proposal_previews(self, session: Session, limit: int | None = None) -> list[ProposalPreview]:
+        previews: list[ProposalPreview] = []
+        for ranked_market in self.ranked_candidates(limit=limit or settings.scan_limit):
+            market = ranked_market.market
+            evidences = self.evidence_engine.build(ranked_market)
+            proposal = self.strategy.score_market(market, evidences)
+            if proposal is None:
+                previews.append(
+                    ProposalPreview(
+                        market=market,
+                        rank_score=ranked_market.score,
+                        ranking_reasons=ranked_market.reasons,
+                        evidences=evidences,
+                        suggested_side='hold',
+                        confidence=0.0,
+                        model_probability=market.yes_price,
+                        market_implied_probability=market.yes_price,
+                        edge_bps=0,
+                        suggested_stake_usd=0.0,
+                        explanation='No edge passed the current thresholds.',
+                        risk_flags=[],
+                        should_trade=False,
+                    )
+                )
+                continue
+            ok, flags = self.risk.evaluate(session, market, proposal)
+            previews.append(
+                ProposalPreview(
+                    market=market,
+                    rank_score=ranked_market.score,
+                    ranking_reasons=ranked_market.reasons,
+                    evidences=evidences,
+                    suggested_side=proposal.side,
+                    confidence=proposal.confidence,
+                    model_probability=proposal.model_probability,
+                    market_implied_probability=proposal.market_implied_probability,
+                    edge_bps=proposal.edge_bps,
+                    suggested_stake_usd=proposal.stake_usd,
+                    explanation=proposal.explanation,
+                    risk_flags=flags,
+                    should_trade=ok,
+                )
+            )
+        return previews

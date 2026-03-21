@@ -16,6 +16,7 @@ PolyClaw is a practical MVP for a **Polymarket auto-analysis + guarded execution
 - Pluggable providers for markets, evidence, and execution
 - Real Polymarket Gamma market ingestion with sample fallback
 - Market candidate ranking and heuristic evidence generation
+- Proposal preview center with materialize-to-decision flow
 - SQLite persistence via SQLAlchemy
 - FastAPI service for health, scans, decisions, approvals, and positions
 - Risk engine with stale data checks, spread/liquidity thresholds, exposure caps, and confidence floors
@@ -46,6 +47,8 @@ Then visit:
 - `POST /scan`
 - `GET /markets`
 - `GET /candidates`
+- `GET /proposals`
+- `POST /proposals/{market_id}/materialize`
 - `GET /decisions`
 - `POST /decisions/{id}/approve`
 - `POST /runner/tick`
