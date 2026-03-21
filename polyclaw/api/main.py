@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from polyclaw.db import Base, engine, get_session
 from polyclaw.models import Decision, Market, Position, AuditLog
-from polyclaw.schemas import ApprovalResponse, DecisionOut, RunnerTickResponse, ScanResponse
+from polyclaw.schemas import ApprovalResponse, DecisionOut, RankedMarketOut, RunnerTickResponse, ScanResponse
 from polyclaw.services.analysis import AnalysisService
 from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
@@ -31,6 +31,23 @@ def scan(session: Session = Depends(get_session)):
 @app.get('/markets')
 def list_markets(session: Session = Depends(get_session)):
     return session.scalars(select(Market).order_by(Market.fetched_at.desc())).all()
+
+
+@app.get('/candidates', response_model=list[RankedMarketOut])
+def candidates(limit: int = 10):
+    ranked = analysis_service.ranked_candidates(limit=limit)
+    return [
+        RankedMarketOut(
+            market_id=item.market.market_id,
+            title=item.market.title,
+            score=item.score,
+            reasons=item.reasons,
+            liquidity_usd=item.market.liquidity_usd,
+            volume_24h_usd=item.market.volume_24h_usd,
+            spread_bps=item.market.spread_bps,
+        )
+        for item in ranked
+    ]
 
 
 @app.get('/decisions', response_model=list[DecisionOut])

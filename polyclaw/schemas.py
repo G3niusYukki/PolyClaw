@@ -31,3 +31,13 @@ class ApprovalResponse(BaseModel):
 class RunnerTickResponse(BaseModel):
     decisions_considered: int
     orders_submitted: int
+
+
+class RankedMarketOut(BaseModel):
+    market_id: str
+    title: str
+    score: float
+    reasons: list[str]
+    liquidity_usd: float
+    volume_24h_usd: float
+    spread_bps: int
