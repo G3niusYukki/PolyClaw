@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyclaw"
+version = "0.1.0"
+description = "Guarded Polymarket auto-analysis and execution framework"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Zeus"}]
+dependencies = [
+  "fastapi>=0.116",
+  "uvicorn>=0.35",
+  "sqlalchemy>=2.0",
+  "pydantic>=2.11",
+  "pydantic-settings>=2.10",
+  "httpx>=0.28",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=6.2",
+]
+
+[project.scripts]
+polyclaw = "polyclaw.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["polyclaw*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
