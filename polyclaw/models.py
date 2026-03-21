@@ -105,3 +105,22 @@ class AuditLog(Base):
     payload: Mapped[str] = mapped_column(Text, default='')
     result: Mapped[str] = mapped_column(String(64), default='ok')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class ProposalRecord(Base):
+    __tablename__ = 'proposal_records'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    suggested_side: Mapped[str] = mapped_column(String(16), default='hold')
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    edge_bps: Mapped[int] = mapped_column(Integer, default=0)
+    suggested_stake_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    explanation: Mapped[str] = mapped_column(Text, default='')
+    ranking_reasons: Mapped[str] = mapped_column(Text, default='')
+    evidence_summaries: Mapped[str] = mapped_column(Text, default='')
+    risk_flags: Mapped[str] = mapped_column(Text, default='')
+    status: Mapped[str] = mapped_column(String(32), default='new', index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

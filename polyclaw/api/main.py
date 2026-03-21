@@ -4,18 +4,20 @@ from sqlalchemy.orm import Session
 
 from polyclaw.config import settings
 from polyclaw.db import Base, engine, get_session
-from polyclaw.models import Decision, Market, Position, AuditLog
-from polyclaw.schemas import ApprovalResponse, DecisionOut, ProposalPreviewOut, RankedMarketOut, RunnerTickResponse, ScanResponse
+from polyclaw.models import Decision, Market, Position, AuditLog, ProposalRecord
+from polyclaw.schemas import ApprovalResponse, DecisionOut, ProposalPreviewOut, ProposalRecordOut, RankedMarketOut, RunnerTickResponse, ScanResponse
 from polyclaw.services.analysis import AnalysisService
 from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
 from polyclaw.services.runner import RunnerService
+from polyclaw.workflow import ProposalWorkflowService
 
 app = FastAPI(title='PolyClaw')
 Base.metadata.create_all(bind=engine)
 analysis_service = AnalysisService()
 execution_service = ExecutionService()
 runner_service = RunnerService()
+workflow_service = ProposalWorkflowService()
 
 
 @app.get('/health')
@@ -73,6 +75,61 @@ def proposals(limit: int = 10, session: Session = Depends(get_session)):
         )
         for item in previews
     ]
+
+
+@app.post('/proposals/persist', response_model=ScanResponse)
+def persist_proposals(limit: int = 10, session: Session = Depends(get_session)):
+    previews = analysis_service.proposal_previews(session, limit=limit)
+    created = workflow_service.persist_previews(session, previews)
+    session.commit()
+    return ScanResponse(markets_scanned=len(previews), decisions_created=created)
+
+
+@app.get('/proposal-records', response_model=list[ProposalRecordOut])
+def proposal_records(session: Session = Depends(get_session)):
+    rows = session.scalars(select(ProposalRecord).order_by(ProposalRecord.updated_at.desc())).all()
+    return [
+        ProposalRecordOut(
+            id=row.id,
+            market_id=row.market_id,
+            title=row.title,
+            suggested_side=row.suggested_side,
+            confidence=row.confidence,
+            edge_bps=row.edge_bps,
+            suggested_stake_usd=row.suggested_stake_usd,
+            ranking_reasons=[x for x in row.ranking_reasons.split('|') if x],
+            evidence_summaries=[x for x in row.evidence_summaries.split('|') if x],
+            risk_flags=[x for x in row.risk_flags.split('|') if x],
+            status=row.status,
+            explanation=row.explanation,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+@app.post('/proposal-records/{proposal_id}/status', response_model=ProposalRecordOut)
+def set_proposal_status(proposal_id: int, status: str, session: Session = Depends(get_session)):
+    row = workflow_service.set_status(session, proposal_id, status)
+    if not row:
+        raise HTTPException(status_code=404, detail='proposal_not_found')
+    return ProposalRecordOut(
+        id=row.id,
+        market_id=row.market_id,
+        title=row.title,
+        suggested_side=row.suggested_side,
+        confidence=row.confidence,
+        edge_bps=row.edge_bps,
+        suggested_stake_usd=row.suggested_stake_usd,
+        ranking_reasons=[x for x in row.ranking_reasons.split('|') if x],
+        evidence_summaries=[x for x in row.evidence_summaries.split('|') if x],
+        risk_flags=[x for x in row.risk_flags.split('|') if x],
+        status=row.status,
+        explanation=row.explanation,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 @app.get('/decisions', response_model=list[DecisionOut])

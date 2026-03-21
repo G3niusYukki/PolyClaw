@@ -58,3 +58,20 @@ class ProposalPreviewOut(BaseModel):
     explanation: str
     risk_flags: list[str]
     should_trade: bool
+
+
+class ProposalRecordOut(BaseModel):
+    id: int
+    market_id: str
+    title: str
+    suggested_side: str
+    confidence: float
+    edge_bps: int
+    suggested_stake_usd: float
+    ranking_reasons: list[str]
+    evidence_summaries: list[str]
+    risk_flags: list[str]
+    status: str
+    explanation: str
+    created_at: datetime
+    updated_at: datetime
