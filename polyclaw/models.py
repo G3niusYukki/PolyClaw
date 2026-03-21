@@ -95,3 +95,13 @@ class Position(Base):
     quantity: Mapped[float] = mapped_column(Float)
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     is_open: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AuditLog(Base):
+    __tablename__ = 'audit_logs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    action: Mapped[str] = mapped_column(String(64), index=True)
+    payload: Mapped[str] = mapped_column(Text, default='')
+    result: Mapped[str] = mapped_column(String(64), default='ok')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

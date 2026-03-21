@@ -1,0 +1,27 @@
+# PolyClaw v1 safety defaults
+execution:
+  mode: paper
+  require_approval: true
+  auto_execute: false
+  live_trading_enabled: false
+
+limits:
+  max_position_usd: 50
+  max_total_exposure_usd: 250
+  max_daily_loss_usd: 200
+  max_consecutive_failures: 3
+  max_slippage_percent: 2.0
+  max_spread_bps: 400
+  min_liquidity_usd: 1000
+  data_max_age_seconds: 10800
+  min_confidence: 0.62
+  min_edge_bps: 700
+
+kill_switch:
+  enabled: false
+  reason: ""
+  require_manual_resume: true
+
+market_policy:
+  whitelist: []
+  blacklist: []

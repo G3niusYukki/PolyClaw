@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from polyclaw.db import Base, engine, get_session
-from polyclaw.models import Decision, Market, Position
+from polyclaw.models import Decision, Market, Position, AuditLog
 from polyclaw.schemas import ApprovalResponse, DecisionOut, RunnerTickResponse, ScanResponse
 from polyclaw.services.analysis import AnalysisService
+from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
 from polyclaw.services.runner import RunnerService
 
@@ -77,3 +78,23 @@ def execute_ready(session: Session = Depends(get_session)):
 @app.get('/positions')
 def positions(session: Session = Depends(get_session)):
     return session.scalars(select(Position).order_by(Position.opened_at.desc())).all()
+
+
+@app.get('/audit-logs')
+def audit_logs(session: Session = Depends(get_session)):
+    return session.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(100)).all()
+
+
+@app.get('/kill-switch')
+def get_kill_switch(session: Session = Depends(get_session)):
+    return kill_switch_state(session)
+
+
+@app.post('/kill-switch/enable')
+def enable_kill_switch(reason: str = 'manual stop', session: Session = Depends(get_session)):
+    return set_kill_switch(session, True, reason)
+
+
+@app.post('/kill-switch/disable')
+def disable_kill_switch(reason: str = 'manual resume', session: Session = Depends(get_session)):
+    return set_kill_switch(session, False, reason)

@@ -20,6 +20,7 @@ PolyClaw is a practical MVP for a **Polymarket auto-analysis + guarded execution
 - Strategy engine with explainable scoring
 - Paper executor for safe dry runs
 - Optional approval gate before execution
+- Kill switch and audit log primitives
 - Tests for core decision and risk logic
 
 ## Architecture
@@ -46,6 +47,10 @@ Then visit:
 - `POST /decisions/{id}/approve`
 - `POST /runner/tick`
 - `POST /execute-ready`
+- `GET /audit-logs`
+- `GET /kill-switch`
+- `POST /kill-switch/enable`
+- `POST /kill-switch/disable`
 
 Or run a full scheduler-style cycle from CLI:
 

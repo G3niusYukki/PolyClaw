@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     min_liquidity_usd: float = 1000.0
     max_market_age_minutes: int = 180
     scan_limit: int = 20
+    max_daily_loss_usd: float = 200.0
+    max_consecutive_failures: int = 3
 
 
 settings = Settings()
