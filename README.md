@@ -19,11 +19,17 @@ PolyClaw is a guarded Polymarket auto-analysis and execution framework. It is de
 - Portfolio-level risk management: Kelly position sizing, event cluster tracking, circuit breakers
 - Postgres persistence with Alembic migrations (SQLite for dev)
 - Historical data ingestion pipeline with Lambda + EventBridge
-- Terraform infrastructure (RDS, S3, Lambda, EventBridge)
+- Terraform infrastructure (RDS, S3, Lambda, EventBridge, ECS Fargate, ALB, Secrets Manager)
+- Polymarket CTF execution via Polygon with order state machine
+- Shadow mode (simulated trading) with signal accuracy monitoring
+- Staged live deployment (shadow → 10% → 25% → 50% → 100%)
+- Reconciliation service comparing system, Polymarket API, and blockchain state
+- AWS ECS Fargate deployment with Application Load Balancer
+- AWS Secrets Manager integration for private keys and API tokens
 - Pluggable providers for markets, evidence, and execution
 - FastAPI service for health, scans, decisions, approvals, and positions
 - Kill switch and audit log primitives
-- 139+ tests covering all core functionality
+- 300+ tests covering all core functionality
 
 ## Architecture
 
@@ -87,8 +93,8 @@ polyclaw backtest    # Run backtest with walk-forward validation
 
 See `docs/superpowers/specs/2026-03-22-production-roadmap-design.md` for the 3-month roadmap:
 - Phase 1: Foundation ✅ (data infrastructure, multi-strategy, backtesting, portfolio risk)
-- Phase 2: Execution (Polymarket CTF integration, order management, reconciliation, shadow mode)
-- Phase 3: Production (observability, scaling, hardening)
+- Phase 2: Execution ✅ (CTF integration, order management, reconciliation, shadow mode, ECS deployment)
+- Phase 3: Production (Grafana dashboards, CloudWatch alarms, Telegram/PagerDuty, CI/CD, DR testing)
 
 ## Disclaimer
 
