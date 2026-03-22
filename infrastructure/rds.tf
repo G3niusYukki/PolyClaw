@@ -13,7 +13,7 @@ resource "aws_db_subnet_group" "polyclaw" {
 resource "aws_security_group" "polyclaw_rds" {
   name        = "polyclaw-rds-sg"
   description = "Security group for PolyClaw RDS instance"
-  vpc_id      = length(var.vpc_id) > 0 ? var.vpc_id : aws_vpc.polyclaw.id
+  vpc_id      = length(var.vpc_id) > 0 ? var.vpc_id : aws_vpc.polyclaw[0].id
 
   ingress {
     from_port   = 5432

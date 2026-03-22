@@ -77,7 +77,6 @@ data "aws_iam_policy_document" "secrets_read" {
 }
 
 resource "aws_secretsmanager_secret_policy" "secrets_read" {
-  name       = "polyclaw-secrets-read-policy"
   secret_arn = aws_secretsmanager_secret.ctf_private_key.arn
   policy     = data.aws_iam_policy_document.secrets_read.json
 }

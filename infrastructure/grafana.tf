@@ -1,9 +1,5 @@
 # Grafana Dashboard Provisioning for PolyClaw
 
-data "template_file" "grafana_dashboard" {
-  template = file("${path.module}/grafana-dashboard.json")
-}
-
 resource "aws_s3_bucket" "grafana_dashboards" {
   bucket = "${var.environment}-polyclaw-grafana-dashboards"
   tags = {
@@ -15,8 +11,8 @@ resource "aws_s3_bucket" "grafana_dashboards" {
 resource "aws_s3_bucket_object" "dashboard_json" {
   bucket  = aws_s3_bucket.grafana_dashboards.id
   key     = "polyclaw-dashboard.json"
-  content = data.template_file.grafana_dashboard.rendered
-  etag    = md5(data.template_file.grafana_dashboard.rendered)
+  content = local.polyclaw_dashboard_json
+  etag    = md5(local.polyclaw_dashboard_json)
 }
 
 # Grafana Dashboard JSON Provisioner
