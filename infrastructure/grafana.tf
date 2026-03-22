@@ -8,7 +8,7 @@ resource "aws_s3_bucket" "grafana_dashboards" {
   }
 }
 
-resource "aws_s3_bucket_object" "dashboard_json" {
+resource "aws_s3_object" "dashboard_json" {
   bucket  = aws_s3_bucket.grafana_dashboards.id
   key     = "polyclaw-dashboard.json"
   content = local.polyclaw_dashboard_json
@@ -159,7 +159,7 @@ locals {
 }
 
 # Store dashboard JSON in S3 for Grafana file provisioner
-resource "aws_s3_bucket_object" "grafana_dashboard_inline" {
+resource "aws_s3_object" "grafana_dashboard_inline" {
   bucket  = aws_s3_bucket.grafana_dashboards.id
   key     = "dashboard-inline.json"
   content = local.polyclaw_dashboard_json

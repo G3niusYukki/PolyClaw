@@ -19,29 +19,27 @@ locals {
 # Note: Replication is configured on the primary buckets in s3.tf.
 # This module adds the replication configuration for the data bucket.
 
-resource "aws_s3_bucketReplicationConfig" "polyclaw_data_replication" {
+resource "aws_s3_bucket_replication_configuration" "polyclaw_data_replication" {
   bucket = aws_s3_bucket.polyclaw_data.id
   role   = aws_iam_role.s3_replication.arn
 
-  replication_config {
-    rules {
-      id     = "replicate-to-dr"
+  rule {
+    id     = "replicate-to-dr"
+    status = "Enabled"
+
+    filter {}
+
+    destination {
+      bucket        = aws_s3_bucket.polyclaw_data_dr.id
+      storage_class = "STANDARD_IA"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.s3_replication.arn
+      }
+    }
+
+    delete_marker_replication {
       status = "Enabled"
-
-      filter {}
-
-      destination {
-        bucket        = aws_s3_bucket.polyclaw_data_dr.id
-        storage_class = "STANDARD_IA"
-
-        encryption_configuration {
-          replica_kms_key_id = aws_kms_key.s3_replication.arn
-        }
-      }
-
-      delete_marker_replication {
-        status = "Enabled"
-      }
     }
   }
 }

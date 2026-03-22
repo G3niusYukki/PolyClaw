@@ -5,7 +5,7 @@ resource "aws_cloudwatch_event_rule" "ingestion_schedule" {
   name                = "polyclaw-ingestion-schedule"
   description         = "Trigger PolyClaw ingestion Lambda every 3 minutes"
   schedule_expression = "rate(3 minutes)"
-  is_enabled          = true
+  state               = "ENABLED"
 
   tags = {
     Project     = "polyclaw"

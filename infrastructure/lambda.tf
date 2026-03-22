@@ -67,7 +67,7 @@ resource "aws_lambda_function" "ingestion" {
   role          = aws_iam_role.ingestion_lambda.arn
 
   filename         = "lambda/ingestion/deployment.zip"
-  source_code_hash = filebase64sha256("lambda/ingestion/deployment.zip")
+  source_code_hash = fileexists("lambda/ingestion/deployment.zip") ? filebase64sha256("lambda/ingestion/deployment.zip") : ""
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.12"
   timeout          = 300 # 5 minutes

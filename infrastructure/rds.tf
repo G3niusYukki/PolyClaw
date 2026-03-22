@@ -136,7 +136,7 @@ resource "aws_db_instance" "polyclaw" {
   maintenance_window      = "mon:04:00-mon:05:00"
 
   performance_insights_enabled   = true
-  enable_cloudwatch_logs_exports = ["postgresql"]
+  enabled_cloudwatch_logs_exports = ["postgresql"]
 
   tags = {
     Name = "polyclaw-db"

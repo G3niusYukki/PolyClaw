@@ -10,9 +10,10 @@
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     effect = "Allow"
-    principals = {
-      Service = ["ecs-tasks.amazonaws.com"]
-    }
+    principals {
+    type        = "Service"
+    identifiers = ["ecs-tasks.amazonaws.com"]
+  }
     actions = ["sts:AssumeRole"]
   }
 }
@@ -73,9 +74,10 @@ resource "aws_iam_role_policy" "ecs_task_execution_policy" {
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
     effect = "Allow"
-    principals = {
-      Service = ["ecs-tasks.amazonaws.com"]
-    }
+    principals {
+    type        = "Service"
+    identifiers = ["ecs-tasks.amazonaws.com"]
+  }
     actions = ["sts:AssumeRole"]
   }
 }
@@ -156,15 +158,15 @@ resource "aws_secretsmanager_secret_version" "polyclaw_db" {
 
 data "aws_iam_policy_document" "cloudwatch_logs_policy" {
   statement {
-    Effect = "Allow"
-    Action = [
+    effect = "Allow"
+    actions = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
       "logs:DescribeLogGroups",
       "logs:DescribeLogStreams",
     ]
-    Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.environment}/polyclaw/*"
+    resources = ["arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.environment}/polyclaw/*"]
   }
 }
 
