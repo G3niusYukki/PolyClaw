@@ -80,7 +80,7 @@ class Order(Base):
     STATUS_FAILED = 'failed'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    decision_id_fk: Mapped[int] = mapped_column(ForeignKey('decisions.id'))
+    decision_id_fk: Mapped[int | None] = mapped_column(ForeignKey('decisions.id'), default=None)
     client_order_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     mode: Mapped[str] = mapped_column(String(16), default='paper')
     side: Mapped[str] = mapped_column(String(8))

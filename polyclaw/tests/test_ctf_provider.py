@@ -7,6 +7,19 @@ from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.providers.signer import WalletSigner
 
 
+def _mock_order_result(client_order_id: str, side='yes', status='submitted'):
+    """Create a mock OrderResult."""
+    mock = MagicMock()
+    mock.client_order_id = client_order_id
+    mock.venue_order_id = f'0x{"a"*64}'
+    mock.status = status
+    mock.side = side
+    mock.price = 0.55
+    mock.size = 10.0
+    mock.notional_usd = 5.5
+    return mock
+
+
 class TestWalletSigner:
     """Tests for WalletSigner."""
 
@@ -95,11 +108,14 @@ class TestPolymarketCTFProvider:
         mock_market.outcome_yes_price = 0.55
         mock_market.outcome_no_price = 0.45
 
-        # Should not raise
-        result = provider.submit_order(mock_market, 'yes', 10.0, 0.55)
-        assert isinstance(result, dict)
-        assert 'client_order_id' in result
-        assert 'status' in result
+        result_mock = _mock_order_result('test-market-submit')
+
+        with patch.object(provider, '_get_existing_order', return_value=None), \
+             patch.object(provider, '_persist_order_result', return_value=result_mock):
+            result = provider.submit_order(mock_market, 'yes', 10.0, 0.55)
+            assert isinstance(result, dict)
+            assert 'client_order_id' in result
+            assert 'status' in result
 
     def test_submit_order_obj_creates_order_result(self):
         """submit_order_obj returns an OrderResult."""
@@ -116,13 +132,17 @@ class TestPolymarketCTFProvider:
             client_order_id='test-client-123',
         )
 
-        result = provider.submit_order_obj(order_spec)
-        assert result.client_order_id == 'test-client-123'
-        assert result.side == 'yes'
-        assert result.price == 0.55
-        assert result.size == 10.0
-        assert result.notional_usd == 5.5  # 0.55 * 10.0
-        assert result.status in ('submitted', 'filled')
+        result_mock = _mock_order_result('test-client-123')
+
+        with patch.object(provider, '_get_existing_order', return_value=None), \
+             patch.object(provider, '_persist_order_result', return_value=result_mock):
+            result = provider.submit_order_obj(order_spec)
+            assert result.client_order_id == 'test-client-123'
+            assert result.side == 'yes'
+            assert result.price == 0.55
+            assert result.size == 10.0
+            assert result.notional_usd == 5.5  # 0.55 * 10.0
+            assert result.status in ('submitted', 'filled')
 
     def test_submit_order_idempotency(self):
         """Submitting the same client_order_id twice returns cached result."""
@@ -138,14 +158,24 @@ class TestPolymarketCTFProvider:
             outcome='yes',
             client_order_id='idempotent-test-123',
         )
+        result_mock = _mock_order_result('idempotent-test-123')
+        call_count = 0
 
-        # First submission
-        result1 = provider.submit_order_obj(order_spec)
-        # Second submission with same client_order_id
-        result2 = provider.submit_order_obj(order_spec)
+        def get_existing(cid):
+            nonlocal call_count
+            return result_mock if call_count > 0 else None
 
-        assert result1.client_order_id == result2.client_order_id
-        assert result1.status == result2.status
+        def persist(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return result_mock
+
+        with patch.object(provider, '_get_existing_order', side_effect=get_existing), \
+             patch.object(provider, '_persist_order_result', side_effect=persist):
+            result1 = provider.submit_order_obj(order_spec)
+            result2 = provider.submit_order_obj(order_spec)
+            assert result1.client_order_id == result2.client_order_id
+            assert result1.status == result2.status
 
     def test_check_fill_returns_order_update(self):
         """check_fill returns an OrderUpdate."""

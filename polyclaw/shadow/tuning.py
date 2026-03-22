@@ -33,8 +33,8 @@ class ThresholdTuner:
     def suggest_threshold(
         self,
         strategy_id: str,
-        target_accuracy: float = 0.60,
         session: 'Session',
+        target_accuracy: float = 0.60,
         analysis_window_days: int = 30,
     ) -> ThresholdSuggestion:
         """
@@ -45,8 +45,8 @@ class ThresholdTuner:
 
         Args:
             strategy_id: The strategy to analyze
-            target_accuracy: Target accuracy rate (default 0.60 = 60%)
             session: SQLAlchemy session
+            target_accuracy: Target accuracy rate (default 0.60 = 60%)
             analysis_window_days: How many days of history to analyze (default 30)
 
         Returns:

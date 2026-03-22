@@ -18,6 +18,35 @@ def reset_registry():
     StrategyRegistry.reset()
 
 
+@pytest.fixture(autouse=True)
+def fresh_default_db(tmp_path):
+    """Ensure the default test DB has a clean schema with all current columns.
+
+    Uses a fresh temp SQLite file per test session so all new columns
+    (is_shadow, strategy_id, status_history, retry_count, etc.) are present.
+    """
+    import polyclaw.db as db_module
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    # Use a temp file-based SQLite so it's thread-safe and fresh per test
+    tmp_db = tmp_path / 'test.db'
+    fresh_engine = create_engine(f'sqlite:///{tmp_db}', future=True)
+    FreshSessionLocal = sessionmaker(bind=fresh_engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    db_module.Base.metadata.create_all(bind=fresh_engine)
+
+    original_engine = db_module.engine
+    original_session = db_module.SessionLocal
+    db_module.engine = fresh_engine
+    db_module.SessionLocal = FreshSessionLocal
+
+    yield
+
+    db_module.engine = original_engine
+    db_module.SessionLocal = original_session
+    fresh_engine.dispose()
+
+
 @pytest.fixture
 def db_session():
     """Create a fresh in-memory SQLite database for each test.

@@ -495,7 +495,7 @@ class PolymarketCTFProvider:
 
             # Create the order record
             order = Order(
-                decision_id_fk=decision_id_fk or 0,
+                decision_id_fk=decision_id_fk,
                 client_order_id=result.client_order_id,
                 venue_order_id=result.venue_order_id,
                 status=result.status,
