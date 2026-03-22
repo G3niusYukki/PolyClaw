@@ -1,6 +1,6 @@
 # PolyClaw
 
-PolyClaw is a practical MVP for a **Polymarket auto-analysis + guarded execution system**. It is designed around a closed loop:
+PolyClaw is a guarded Polymarket auto-analysis and execution framework. It is designed around a closed loop:
 
 1. Ingest markets from a provider
 2. Enrich with evidence from news / research sources
@@ -13,86 +13,82 @@ PolyClaw is a practical MVP for a **Polymarket auto-analysis + guarded execution
 
 ## Features
 
+- Multi-strategy framework with `BaseStrategy` interface and `StrategyRegistry`
+- Two built-in strategies: **EventCatalyst** (high-conviction events near resolution) and **LiquidityMomentum** (volume spike + breakout)
+- Backtesting engine with walk-forward validation and performance reports
+- Portfolio-level risk management: Kelly position sizing, event cluster tracking, circuit breakers
+- Postgres persistence with Alembic migrations (SQLite for dev)
+- Historical data ingestion pipeline with Lambda + EventBridge
+- Terraform infrastructure (RDS, S3, Lambda, EventBridge)
 - Pluggable providers for markets, evidence, and execution
-- Real Polymarket Gamma market ingestion with sample fallback
-- Market candidate ranking and heuristic evidence generation
-- Proposal preview center with materialize-to-decision flow
-- Persisted proposal workflow with statuses and notification hooks
-- SQLite persistence via SQLAlchemy
 - FastAPI service for health, scans, decisions, approvals, and positions
-- Risk engine with stale data checks, spread/liquidity thresholds, exposure caps, and confidence floors
-- Strategy engine with explainable scoring
-- Paper executor for safe dry runs
-- Optional approval gate before execution
 - Kill switch and audit log primitives
-- Tests for core decision and risk logic
+- 139+ tests covering all core functionality
 
 ## Architecture
 
-```text
-providers -> analysis -> risk -> order planner -> approval gate -> executor -> storage -> API/reporting
+```
+providers -> analysis -> strategies -> risk -> order planner -> approval gate -> executor -> storage -> API/reporting
 ```
 
-## Quick start
+## Quick Start
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+pip install -e ".[dev]"
 uvicorn polyclaw.api.main:app --reload
 ```
 
-Then visit:
-
-- `GET /health`
-- `POST /scan`
-- `GET /markets`
-- `GET /candidates`
-- `GET /proposals`
-- `POST /proposals/persist`
-- `GET /proposal-records`
-- `POST /proposal-records/{proposal_id}/status`
-- `POST /proposals/{market_id}/materialize`
-- `GET /decisions`
-- `POST /decisions/{id}/approve`
-- `POST /runner/tick`
-- `POST /execute-ready`
-- `GET /audit-logs`
-- `GET /kill-switch`
-- `POST /kill-switch/enable`
-- `POST /kill-switch/disable`
-
-Or run a full scheduler-style cycle from CLI:
+### CLI Commands
 
 ```bash
-polyclaw tick
+polyclaw tick        # Run full analysis + execution cycle
+polyclaw backtest    # Run backtest with walk-forward validation
 ```
 
-## Safe defaults
+### API Endpoints
+
+- `GET /health` — Health check
+- `POST /scan` — Run market scan, create decisions
+- `GET /markets` — List all cached markets
+- `GET /candidates` — Ranked market candidates
+- `GET /proposals` — Proposal previews
+- `POST /proposals/persist` — Persist proposals to database
+- `GET /proposal-records` — List persisted proposal records
+- `POST /proposal-records/{id}/status` — Update proposal status
+- `POST /proposals/{market_id}/materialize` — Convert proposal to Decision
+- `GET /decisions` — List all decisions
+- `POST /decisions/{id}/approve` — Approve a decision
+- `POST /runner/tick` — Run full scan + execute-ready cycle
+- `POST /execute-ready` — Execute all approved decisions
+- `GET /positions` — Current positions
+- `GET /audit-logs` — Audit trail
+- `GET/POST /kill-switch` — Kill switch status and control
+
+## Safe Defaults
 
 - `EXECUTION_MODE=paper`
 - `REQUIRE_APPROVAL=true`
 - `AUTO_EXECUTE=false`
 - `LIVE_TRADING_ENABLED=false`
 
-To move toward automation, first disable approval in **paper mode**, review behavior, and only later add a real executor implementation.
+## Key Environment Variables
 
-## Important environment variables
-
+- `DATABASE_URL` — SQLite dev default, Postgres for production
 - `MARKET_SOURCE=sample|polymarket`
-- `POLYMARKET_GAMMA_URL=https://gamma-api.polymarket.com/markets`
-- `REQUEST_TIMEOUT_SECONDS=20`
 - `EXECUTION_MODE=paper|live`
 - `REQUIRE_APPROVAL=true|false`
 - `AUTO_EXECUTE=true|false`
+- `LIVE_TRADING_ENABLED=true|false`
+- `MIN_CONFIDENCE`, `MIN_EDGE_BPS`, `MAX_SPREAD_BPS`, `MIN_LIQUIDITY_USD`, `MAX_TOTAL_EXPOSURE_USD`, `MAX_POSITION_USD`
 
-## Suggested next steps
+## Production Roadmap
 
-1. Implement real Polymarket market ingestion
-2. Implement evidence adapters (news, official sources, social with trust scores)
-3. Implement live execution adapter with dry-run parity
-4. Add backtesting and calibration
-5. Add portfolio correlation limits by event family
+See `docs/superpowers/specs/2026-03-22-production-roadmap-design.md` for the 3-month roadmap:
+- Phase 1: Foundation ✅ (data infrastructure, multi-strategy, backtesting, portfolio risk)
+- Phase 2: Execution (Polymarket CTF integration, order management, reconciliation, shadow mode)
+- Phase 3: Production (observability, scaling, hardening)
 
 ## Disclaimer
 
