@@ -25,11 +25,16 @@ from polyclaw.shadow.accuracy import SignalAccuracyMonitor
 from polyclaw.shadow.mode import ShadowModeEngine
 from polyclaw.shadow.transition import LiveTransitionManager
 from polyclaw.workflow import ProposalWorkflowService
+from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter
+from polyclaw.timeutils import utcnow
 
 # Reconciliation imports
 from polyclaw.providers.ctf import PolymarketCTFProvider
 from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
 from polyclaw.reconciliation.service import ReconciliationService
+
+# Monitoring imports
+from polyclaw.monitoring.health import ComponentHealth as _ComponentHealth, ComponentStatus as _ComponentStatus, HealthChecker as _HealthChecker, HealthStatus as _HealthStatus
 
 app = FastAPI(title='PolyClaw')
 Base.metadata.create_all(bind=engine)
@@ -52,6 +57,32 @@ _last_reconciliation_report = None
 @app.get('/health')
 def health():
     return {'status': 'ok', 'service': 'PolyClaw'}
+
+
+@app.get('/health/detailed')
+def health_detailed(session: Session = Depends(get_session)):
+    """
+    Return a detailed health status for all PolyClaw components.
+
+    Checks: database connectivity, Polymarket API, CTF contract,
+    data freshness, and kill switch status.
+    """
+    checker = _HealthChecker(session=session)
+    status = checker.check()
+
+    return {
+        'overall_status': status.overall_status.value,
+        'timestamp': status.timestamp.isoformat(),
+        'checks': [
+            {
+                'component_name': c.component_name,
+                'status': c.status.value,
+                'latency_ms': round(c.latency_ms, 2),
+                'error_message': c.error_message,
+            }
+            for c in status.checks
+        ],
+    }
 
 
 @app.post('/scan', response_model=ScanResponse)
@@ -415,6 +446,105 @@ def get_reconciliation_report(session: Session = Depends(get_session)):
         auto_close_triggered=report.auto_close_triggered,
         auto_close_count=report.auto_close_count,
     )
+
+
+# ---------------------------------------------------------------------------
+# PnL / Reports Endpoints
+# ---------------------------------------------------------------------------
+
+
+_pnl_reporter = PnLReporter()
+_daily_report_generator = DailyReportGenerator(pnl_reporter=_pnl_reporter)
+
+
+@app.get('/reports/pnl')
+def pnl_report(
+    date: str | None = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Get daily PnL breakdown by strategy, market, and side.
+
+    Query params:
+        date: ISO date string (YYYY-MM-DD), defaults to today
+    """
+    target = utcnow()
+    if date:
+        from datetime import datetime as dt
+        try:
+            target = dt.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail='Invalid date format. Use YYYY-MM-DD.')
+
+    report = _pnl_reporter.daily_pnl(session, date=target)
+    return report
+
+
+@app.get('/reports/attribution')
+def attribution_report(
+    start_date: str,
+    end_date: str,
+    session: Session = Depends(get_session),
+):
+    """
+    Get strategy attribution over a date range.
+
+    Query params:
+        start_date: ISO datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+        end_date: ISO datetime string
+    """
+    from datetime import datetime as dt
+
+    try:
+        start = dt.fromisoformat(start_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail='Invalid start_date format.')
+
+    try:
+        end = dt.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail='Invalid end_date format.')
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail='start_date must be before end_date.')
+
+    report = _pnl_reporter.attribution(session, start, end)
+    return report
+
+
+@app.get('/reports/daily')
+def daily_report(
+    date: str | None = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Get the full daily report with PnL summary, metrics, and top positions.
+
+    Query params:
+        date: ISO date string (YYYY-MM-DD), defaults to today
+    """
+    target = utcnow()
+    if date:
+        from datetime import datetime as dt
+        try:
+            target = dt.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail='Invalid date format. Use YYYY-MM-DD.')
+
+    report = _daily_report_generator.generate(session, date=target)
+    return {
+        'date': report.date,
+        'pnl_summary': {
+            'total_pnl': report.pnl_summary.total_pnl,
+            'trade_count': report.pnl_summary.trade_count,
+            'win_count': report.pnl_summary.win_count,
+            'loss_count': report.pnl_summary.loss_count,
+            'win_rate': report.pnl_summary.win_rate,
+            'sharpe_ratio': report.pnl_summary.sharpe_ratio,
+        },
+        'top_positions': report.top_positions,
+        'unrealized_pnl': report.unrealized_pnl,
+    }
 
 
 # ---------------------------------------------------------------------------

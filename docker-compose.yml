@@ -1,0 +1,84 @@
+version: '3.9'
+
+services:
+  polyclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: polyclaw
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://polyclaw_dev:polyclaw_dev@postgres:5432/polyclaw_dev
+      - MARKET_SOURCE=sample
+      - EXECUTION_MODE=paper
+      - REQUIRE_APPROVAL=true
+      - AUTO_EXECUTE=false
+      - LIVE_TRADING_ENABLED=false
+      - SHADOW_MODE_ENABLED=true
+      - SHADOW_STAGE=0
+      - MAX_POSITION_USD=50
+      - MAX_TOTAL_EXPOSURE_USD=250
+      - MIN_CONFIDENCE=0.62
+      - MIN_EDGE_BPS=700
+      - MAX_SPREAD_BPS=400
+      - MIN_LIQUIDITY_USD=1000
+      - MAX_MARKET_AGE_MINUTES=180
+      - SCAN_LIMIT=20
+      - MAX_DAILY_LOSS_USD=200
+      - MAX_CONSECUTIVE_FAILURES=3
+      - POLYMARKET_GAMMA_URL=https://gamma-api.polymarket.com/markets
+      - REQUEST_TIMEOUT_SECONDS=20
+      - POLYGON_RPC_URL=https://polygon-rpc.com
+      - CTF_CONTRACT_ADDRESS=0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+      - PRICE_BAND_PCT=2.0
+      - DEFAULT_POLL_INTERVAL=5
+      - DEFAULT_POLL_TIMEOUT=60
+      # Secrets (use env vars or .env file for actual values)
+      # CTF_PRIVATE_KEY=0x...
+      # POLYMARKET_API_KEY=
+    volumes:
+      - ./polyclaw:/app/polyclaw:ro
+      - ./alembic:/app/alembic:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - polyclaw-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: polyclaw-db
+    environment:
+      - POSTGRES_USER=polyclaw_dev
+      - POSTGRES_PASSWORD=polyclaw_dev
+      - POSTGRES_DB=polyclaw_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - polyclaw-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polyclaw_dev -d polyclaw_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - polyclaw-net
+
+volumes:
+  polyclaw-db-data:
+    name: polyclaw-db-data
+
+networks:
+  polyclaw-net:
+    name: polyclaw-net
+    driver: bridge

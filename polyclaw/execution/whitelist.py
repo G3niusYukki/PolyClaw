@@ -10,6 +10,7 @@ from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+    from polyclaw.domain import MarketSnapshot
 
 # Default expand criteria thresholds
 DEFAULT_MIN_LIQUIDITY_USD = 50_000.0  # $50K minimum liquidity
@@ -173,3 +174,40 @@ class MarketWhitelist:
     def sync_from_db(self, session: 'Session') -> None:
         """Sync the session reference from external call."""
         self._session = session
+
+    def evaluate_expansion_candidates(
+        self,
+        markets: list['MarketSnapshot'],
+    ) -> list[str]:
+        """
+        Evaluate a list of market snapshots and return IDs of expansion candidates.
+
+        A market is an expansion candidate if it meets ALL of:
+          - Liquidity > $50,000
+          - Spread < 200 basis points
+          - Volume > $10,000 in last 24h
+          - Not already whitelisted
+
+        Args:
+            markets: List of MarketSnapshot objects to evaluate
+
+        Returns:
+            List of market IDs that qualify as expansion candidates
+        """
+        session = self._get_session()
+
+        # Get already whitelisted IDs for quick lookup
+        existing = set(self.get_whitelist())
+
+        candidates = []
+        for market in markets:
+            if market.market_id in existing:
+                continue
+            if (
+                market.liquidity_usd > 50_000.0
+                and market.spread_bps < 200
+                and market.volume_24h_usd > 10_000.0
+            ):
+                candidates.append(market.market_id)
+
+        return candidates
