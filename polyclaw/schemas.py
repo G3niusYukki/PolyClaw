@@ -75,3 +75,30 @@ class ProposalRecordOut(BaseModel):
     explanation: str
     created_at: datetime
     updated_at: datetime
+
+
+class DiscrepancyItemOut(BaseModel):
+    market_id: str
+    source1: str
+    source2: str
+    expected_value: float
+    actual_value: float
+    drift_usd: float
+
+
+class ReconciliationReportOut(BaseModel):
+    drift_detected: bool
+    total_drift_usd: float
+    discrepancy_items: list[DiscrepancyItemOut]
+    timestamp: datetime
+    auto_close_triggered: bool
+    auto_close_count: int
+
+
+class ReconciliationRunResponse(BaseModel):
+    status: str
+    drift_detected: bool
+    total_drift_usd: float
+    discrepancy_count: int
+    auto_close_triggered: bool
+    auto_close_count: int
