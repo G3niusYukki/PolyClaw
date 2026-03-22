@@ -10,6 +10,8 @@ from polyclaw.repositories import create_decision, replace_evidence, upsert_mark
 from polyclaw.risk import RiskEngine
 from polyclaw.safety import log_event
 from polyclaw.strategy import StrategyEngine
+from polyclaw.strategies import FeatureEngine
+from polyclaw.strategies.registry import StrategyRegistry
 
 
 class AnalysisService:
@@ -22,6 +24,55 @@ class AnalysisService:
         self.ranker = MarketRanker()
         self.strategy = StrategyEngine()
         self.risk = RiskEngine()
+        self.feature_engine = FeatureEngine()
+        self._registry = StrategyRegistry()
+
+    def _get_enabled_strategies(self) -> list:
+        """Get enabled strategies from registry. Returns empty list if none registered."""
+        return self._registry.list_enabled()
+
+    def _generate_multi_strategy_proposals(self, market, evidences: list):
+        """Generate proposals from all enabled strategies.
+
+        Returns a list of proposals from each strategy that produces a signal.
+        Falls back to the legacy StrategyEngine if no strategies are registered.
+        """
+        strategies = self._get_enabled_strategies()
+
+        if not strategies:
+            # Backward compatibility: use legacy strategy engine
+            proposal = self.strategy.score_market(market, evidences)
+            return [proposal] if proposal else []
+
+        proposals = []
+        features_by_strategy = self.feature_engine.compute_features(market, strategies)
+
+        for strat in strategies:
+            features = features_by_strategy.get(strat.strategy_id, {})
+            signal = strat.generate_signals(market, features)
+            if signal is not None:
+                # Convert Signal to DecisionProposal for compatibility
+                from polyclaw.domain import DecisionProposal
+                stake = min(settings.max_position_usd, 10 + signal.edge_bps / 100)
+                proposals.append(
+                    DecisionProposal(
+                        side=signal.side.value,
+                        confidence=signal.confidence,
+                        model_probability=(
+                            market.yes_price if signal.side.value == 'yes'
+                            else (1 - market.no_price)
+                        ),
+                        market_implied_probability=(
+                            market.yes_price if signal.side.value == 'yes'
+                            else market.no_price
+                        ),
+                        edge_bps=signal.edge_bps,
+                        stake_usd=round(stake, 2),
+                        explanation=signal.explanation,
+                        risk_flags=[],
+                    )
+                )
+        return proposals
 
     def scan(self, session: Session) -> tuple[int, int]:
         try:
@@ -43,17 +94,18 @@ class AnalysisService:
             market_record = upsert_market(session, market)
             evidences = self.evidence_engine.build(ranked_market)
             replace_evidence(session, market_record, evidences)
-            proposal = self.strategy.score_market(market, evidences)
-            if not proposal:
-                continue
-            ok, flags = self.risk.evaluate(session, market, proposal)
-            proposal.risk_flags = flags
-            if not ok:
-                log_event(session, 'decision_rejected', f'market={market.market_id}|flags={"|".join(flags)}', 'blocked')
-                continue
-            create_decision(session, market_record, proposal, requires_approval=settings.require_approval)
-            log_event(session, 'decision_created', f'market={market.market_id}|side={proposal.side}|edge_bps={proposal.edge_bps}|rank_score={ranked_market.score}', 'ok')
-            created += 1
+            proposals = self._generate_multi_strategy_proposals(market, evidences)
+            for proposal in proposals:
+                if not proposal:
+                    continue
+                ok, flags = self.risk.evaluate(session, market, proposal)
+                proposal.risk_flags = flags
+                if not ok:
+                    log_event(session, 'decision_rejected', f'market={market.market_id}|flags={"|".join(flags)}', 'blocked')
+                    continue
+                create_decision(session, market_record, proposal, requires_approval=settings.require_approval)
+                log_event(session, 'decision_created', f'market={market.market_id}|side={proposal.side}|edge_bps={proposal.edge_bps}|rank_score={ranked_market.score}', 'ok')
+                created += 1
         session.commit()
         return len(ranked_markets), created
 
@@ -70,8 +122,9 @@ class AnalysisService:
         for ranked_market in self.ranked_candidates(limit=limit or settings.scan_limit):
             market = ranked_market.market
             evidences = self.evidence_engine.build(ranked_market)
-            proposal = self.strategy.score_market(market, evidences)
-            if proposal is None:
+            proposals = self._generate_multi_strategy_proposals(market, evidences)
+
+            if not proposals:
                 previews.append(
                     ProposalPreview(
                         market=market,
@@ -90,20 +143,23 @@ class AnalysisService:
                     )
                 )
                 continue
-            ok, flags = self.risk.evaluate(session, market, proposal)
+
+            # Select the best proposal (highest edge_bps)
+            best_proposal = max(proposals, key=lambda p: p.edge_bps)
+            ok, flags = self.risk.evaluate(session, market, best_proposal)
             previews.append(
                 ProposalPreview(
                     market=market,
                     rank_score=ranked_market.score,
                     ranking_reasons=ranked_market.reasons,
                     evidences=evidences,
-                    suggested_side=proposal.side,
-                    confidence=proposal.confidence,
-                    model_probability=proposal.model_probability,
-                    market_implied_probability=proposal.market_implied_probability,
-                    edge_bps=proposal.edge_bps,
-                    suggested_stake_usd=proposal.stake_usd,
-                    explanation=proposal.explanation,
+                    suggested_side=best_proposal.side,
+                    confidence=best_proposal.confidence,
+                    model_probability=best_proposal.model_probability,
+                    market_implied_probability=best_proposal.market_implied_probability,
+                    edge_bps=best_proposal.edge_bps,
+                    suggested_stake_usd=best_proposal.stake_usd,
+                    explanation=best_proposal.explanation,
                     risk_flags=flags,
                     should_trade=ok,
                 )
