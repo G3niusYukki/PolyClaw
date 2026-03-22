@@ -1,6 +1,7 @@
 import argparse
 import json
 from datetime import date, timedelta
+from typing import TypedDict
 
 from polyclaw.db import Base, SessionLocal, engine
 from polyclaw.services.runner import RunnerService
@@ -100,6 +101,9 @@ def run_backtest(args: argparse.Namespace) -> None:
         return
 
     # Run walk-forward validation
+    if not strategy:
+        print(f'Error: Strategy {args.strategy!r} not found in registry.')
+        return
     validator = WalkForwardValidator(
         strategy=strategy,
         train_days=args.train_days,
@@ -156,7 +160,7 @@ def run_backtest(args: argparse.Namespace) -> None:
                 print(
                     f"  Window {w.window_index}: "
                     f"Sharpe={w.sharpe_ratio:.4f} "
-                    f"DD={w.max_dd:.4f} "
+                    f"DD={w.max_drawdown:.4f} "
                     f"WR={w.win_rate:.4f} "
                     f"Trades={w.total_trades}"
                 )
@@ -179,7 +183,20 @@ def _generate_sample_history(start_date: date, end_date: date) -> list:
     current = start_date
     day = timedelta(days=1)
 
-    market_configs = [
+    class MarketConfig(TypedDict):
+        market_id: str
+        title: str
+        description: str
+        yes_price: float
+        no_price: float
+        spread_bps: int
+        liquidity_usd: float
+        volume_24h_usd: float
+        category: str
+        event_key: str
+        resolution_days_offset: int
+
+    market_configs: list[MarketConfig] = [
         {
             'market_id': 'pm-us-election-demo',
             'title': 'Will candidate A win and be elected?',

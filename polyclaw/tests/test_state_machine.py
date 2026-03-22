@@ -1,13 +1,12 @@
 """Tests for the order state machine."""
-from unittest.mock import MagicMock
 
 import pytest
 
 from polyclaw.execution.state import (
-    OrderStateMachine,
-    OrderState,
-    StateTransition,
     VALID_TRANSITIONS,
+    OrderState,
+    OrderStateMachine,
+    StateTransition,
 )
 
 
@@ -16,7 +15,7 @@ class MockOrder:
 
     def __init__(self, status: str = 'submitted'):
         self.status = status
-        self.status_history = []
+        self.status_history: list = []
         self.updated_at = None
 
 

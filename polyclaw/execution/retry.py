@@ -6,7 +6,8 @@ import functools
 import inspect
 import logging
 import time
-from typing import Any, Callable, TypeVar, ParamSpec
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 import httpx
 
@@ -146,7 +147,7 @@ def retry(
 
             while attempt < max_attempts:
                 try:
-                    return await fn(*args, **kwargs)  # type: ignore[operator]
+                    return await fn(*args, **kwargs)  # type: ignore[no-any-return, misc]
                 except NonRetryableError:
                     raise
                 except Exception as exc:  # noqa: BLE001
@@ -184,6 +185,6 @@ def retry(
         # Return async wrapper if the function is async, otherwise sync wrapper
         if inspect.iscoroutinefunction(fn):
             return async_wrapper  # type: ignore[return-value]
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator

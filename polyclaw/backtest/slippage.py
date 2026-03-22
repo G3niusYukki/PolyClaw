@@ -174,6 +174,6 @@ class SlippageModel:
             return None
 
         if prefer == 'high':
-            return max(valid_prices)
+            return max(valid_prices)  # type: ignore[no-any-return]
         else:
-            return min(valid_prices)
+            return min(valid_prices)  # type: ignore[no-any-return]

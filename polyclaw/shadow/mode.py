@@ -1,10 +1,9 @@
 """Shadow Mode Engine — simulates order execution without real submission."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from polyclaw.config import settings
 from polyclaw.domain import MarketSnapshot
 from polyclaw.models import Position, ShadowResult
 from polyclaw.repositories import upsert_market
@@ -65,8 +64,8 @@ class ShadowModeEngine:
         """
         # MarketSnapshot: yes_price / no_price
         # Market ORM: outcome_yes_price / outcome_no_price
-        yes_price = getattr(market, 'yes_price', None) or getattr(market, 'outcome_yes_price', 0.0)
-        no_price = getattr(market, 'no_price', None) or getattr(market, 'outcome_no_price', 0.0)
+        yes_price: float = getattr(market, 'yes_price', None) or getattr(market, 'outcome_yes_price', 0.0)  # type: ignore[assignment]
+        no_price: float = getattr(market, 'no_price', None) or getattr(market, 'outcome_no_price', 0.0)  # type: ignore[assignment]
         return round((yes_price + no_price) / 2.0, 4)
 
     def calculate_shadow_fill_price(self, market, side: str) -> float:

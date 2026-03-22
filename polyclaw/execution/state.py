@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -105,7 +106,7 @@ class OrderStateMachine:
             ValueError: If the transition is not valid from the current state.
         """
         metadata = metadata or {}
-        current_state = OrderState(order.status)
+        current_state = OrderState(getattr(order, 'status', 'created'))
         target_state = new_state
 
         # Validate the transition
@@ -135,7 +136,8 @@ class OrderStateMachine:
         })
 
         # Update the order
-        order.status = target_state.value
+        _order: Any = order
+        _order.status = target_state.value
         if hasattr(order, 'status_history'):
             order.status_history = history
         if hasattr(order, 'updated_at'):
@@ -164,7 +166,7 @@ class OrderStateMachine:
             # Handle JSON string if stored as string
             import json
             try:
-                return json.loads(history)
+                return json.loads(history)  # type: ignore[no-any-return]
             except Exception:
                 return []
         return list(history)

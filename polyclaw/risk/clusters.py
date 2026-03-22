@@ -1,6 +1,5 @@
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -122,11 +121,10 @@ class EventClusterTracker:
             if not pos.is_open:
                 continue
             # Check by market_id first
-            if pos.market_id in cluster_market_ids:
-                total += abs(pos.notional_usd)
-            # Also check by event_key as fallback
-            elif getattr(pos, 'event_key', '') and cluster_key == extract_cluster_from_title(
-                getattr(pos, 'event_key', '')
+            if pos.market_id in cluster_market_ids or (
+                getattr(pos, 'event_key', '') != '' and cluster_key == extract_cluster_from_title(
+                    getattr(pos, 'event_key', '')
+                )
             ):
                 total += abs(pos.notional_usd)
 

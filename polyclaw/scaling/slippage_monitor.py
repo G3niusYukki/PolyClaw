@@ -167,7 +167,7 @@ class SlippageMonitor:
         """
         stats = self.get_slippage_stats(session=session, window_days=7)
         avg = stats['avg_slippage_pct']
-        return avg > self.avg_threshold_pct
+        return bool(avg > self.avg_threshold_pct)
 
     def get_excessive_slippage_markets(
         self,

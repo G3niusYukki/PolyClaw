@@ -21,11 +21,10 @@ import httpx
 from polyclaw.config import settings
 from polyclaw.db import SessionLocal
 from polyclaw.execution.orders import OrderSpec, OrderType
-from polyclaw.execution.retry import retry, RetryableError
-from polyclaw.execution.state import OrderState, OrderStateMachine
+from polyclaw.execution.retry import RetryableError, retry
+from polyclaw.execution.state import OrderStateMachine
 from polyclaw.execution.tracker import OrderTracker, OrderUpdate
 from polyclaw.models import Order
-from polyclaw.providers.base import ExecutionProvider
 from polyclaw.providers.signer import get_signer
 from polyclaw.timeutils import utcnow
 
@@ -113,8 +112,8 @@ class PolymarketCTFProvider:
             rpc_url: Polygon RPC URL. Defaults to POLYGON_RPC_URL from settings.
             contract_address: CTF contract address. Defaults to CTF_CONTRACT_ADDRESS.
         """
-        self._rpc_url = rpc_url or getattr(settings, 'polygon_rpc_url', 'https://polygon-rpc.com')
-        self._contract_address = contract_address or getattr(settings, 'ctf_contract_address', '0x0000000000000000000000000000000000000000')
+        self._rpc_url = rpc_url if rpc_url is not None else str(getattr(settings, 'polygon_rpc_url', 'https://polygon-rpc.com') or 'https://polygon-rpc.com')
+        self._contract_address = contract_address if contract_address is not None else str(getattr(settings, 'ctf_contract_address', '0x0000000000000000000000000000000000000000') or '0x0000000000000000000000000000000000000000')
         self._http_client: httpx.Client | None = None
         self._signer = get_signer()
         self._state_machine = OrderStateMachine()
@@ -318,7 +317,7 @@ class PolymarketCTFProvider:
             result = response.json()
             if 'error' in result:
                 raise RetryableError(f"RPC error: {result['error']}")
-            return result.get('result', {})
+            return result.get('result', {})  # type: ignore[no-any-return]
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 429:
                 raise RetryableError("Rate limited")
@@ -473,6 +472,7 @@ class PolymarketCTFProvider:
         session = SessionLocal()
         try:
             from sqlalchemy import select
+
             from polyclaw.models import Decision, Market
 
             # Find the decision for this market if market is provided

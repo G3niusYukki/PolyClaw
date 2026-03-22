@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta
-from sqlalchemy import select, func
+from datetime import datetime
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from polyclaw.models import AuditLog, Decision, Order
 from polyclaw.timeutils import utcnow
-
 
 # ---------------------------------------------------------------------------
 # Circuit Breaker state helpers (stored in memory for runtime state)
@@ -39,10 +39,10 @@ class _CircuitState:
         self._global_triggered_at = None
 
     def is_strategy_triggered(self, strategy_id: str) -> bool:
-        return self._strategy_states.get(strategy_id, {}).get('triggered', False)
+        return bool(self._strategy_states.get(strategy_id, {}).get('triggered', False))
 
     def get_strategy_reason(self, strategy_id: str) -> str:
-        return self._strategy_states.get(strategy_id, {}).get('reason', '')
+        return str(self._strategy_states.get(strategy_id, {}).get('reason', ''))
 
     def get_strategy_triggered_at(self, strategy_id: str) -> datetime | None:
         return self._strategy_states.get(strategy_id, {}).get('triggered_at', None)
@@ -62,7 +62,7 @@ class _CircuitState:
             self._strategy_states[strategy_id]['manual_review_required'] = True
 
     def is_strategy_awaiting_manual_review(self, strategy_id: str) -> bool:
-        return self._strategy_states.get(strategy_id, {}).get('manual_review_required', False)
+        return bool(self._strategy_states.get(strategy_id, {}).get('manual_review_required', False))
 
     def clear_strategy_manual_review(self, strategy_id: str) -> None:
         if strategy_id in self._strategy_states:

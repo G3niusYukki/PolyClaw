@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from polyclaw.models import Market, MarketWhitelistRecord
+from polyclaw.models import MarketWhitelistRecord
 from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
     from polyclaw.domain import MarketSnapshot
 
 # Default expand criteria thresholds
@@ -105,7 +106,7 @@ class MarketWhitelist:
 
     def _meets_expand_criteria(self, liquidity_usd: float, spread_bps: float) -> bool:
         """Check if market meets the auto-expand criteria."""
-        return (
+        return bool(
             liquidity_usd >= self.min_liquidity_usd
             and spread_bps <= self.max_spread_bps
         )

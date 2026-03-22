@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from polyclaw.models import Position, ShadowResult
+from polyclaw.models import ShadowResult
 from polyclaw.safety import GlobalCircuitBreaker
 from polyclaw.timeutils import utcnow
 
@@ -134,7 +134,6 @@ class PerformanceEvaluator:
 
     def _compute_sharpe(self, session: 'Session', window_days: int = 30) -> float | None:
         """Compute Sharpe ratio from shadow results over the window."""
-        import statistics
         from datetime import timedelta
 
         cutoff = utcnow() - timedelta(days=window_days)
@@ -152,7 +151,7 @@ class PerformanceEvaluator:
         variance = sum((p - mean_pnl) ** 2 for p in pnls) / max(len(pnls) - 1, 1)
         std_dev = max(variance ** 0.5, 1e-9)
         # Annualized Sharpe (daily returns, 252 trading days)
-        return round(mean_pnl / std_dev * (252 ** 0.5), 4)
+        return round(mean_pnl / std_dev * (252 ** 0.5), 4)  # type: ignore[no-any-return]
 
     def _compute_drawdown(self, session: 'Session', window_days: int = 30) -> float:
         """Compute current drawdown from equity curve."""

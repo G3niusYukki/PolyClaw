@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from polyclaw.models import Decision, Market, Order, Position, ShadowResult
+from polyclaw.models import Position, ShadowResult
 from polyclaw.monitoring.channels import ChannelResponse, TelegramChannel
 from polyclaw.timeutils import utcnow
 
@@ -172,6 +172,8 @@ class PnLReporter:
         # Aggregate PnL by day
         daily_pnl: dict[str, float] = {}
         for r in results:
+            if r.resolved_at is None:
+                continue
             day_key = r.resolved_at.strftime('%Y-%m-%d')
             daily_pnl[day_key] = daily_pnl.get(day_key, 0.0) + r.pnl
 

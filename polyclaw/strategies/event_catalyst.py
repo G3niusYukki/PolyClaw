@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import timedelta
 
 from polyclaw.config import settings
 from polyclaw.domain import MarketSnapshot
@@ -192,7 +191,7 @@ class EventCatalystStrategy(BaseStrategy):
         sentiment = features.get('news_sentiment', 0.0)
         volume_surge = features.get('volume_surge_ratio', 0.0)
         price_momentum = features.get('price_momentum', 0.0)
-        return 0.45 + abs(sentiment) * 0.3 + volume_surge * 0.1 + price_momentum * 0.15
+        return 0.45 + abs(sentiment) * 0.3 + volume_surge * 0.1 + price_momentum * 0.15  # type: ignore[no-any-return]
 
     def _compute_sentiment(self, title: str) -> float:
         """Heuristic sentiment from title keywords."""

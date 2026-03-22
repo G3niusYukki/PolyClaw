@@ -1,4 +1,5 @@
-from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,11 +12,14 @@ from polyclaw.repositories import record_order_and_position
 from polyclaw.safety import daily_executed_notional, kill_switch_state, log_event
 from polyclaw.timeutils import utcnow
 
+if TYPE_CHECKING:
+    from polyclaw.providers.ctf import PolymarketCTFProvider
+
 
 class ExecutionService:
     def __init__(self):
         self.executor = PaperExecutionProvider()
-        self._ctf_executor: 'PolymarketCTFProvider | None' = None
+        self._ctf_executor: PolymarketCTFProvider | None = None
         self._price_validator = PriceBandValidator()
 
     @property

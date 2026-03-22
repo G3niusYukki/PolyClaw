@@ -44,7 +44,7 @@ def _get(url: str, timeout: int | None = None) -> dict | list:
     req = Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
     _limiter.wait()
     with urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode('utf-8'))
+        return json.loads(resp.read().decode('utf-8'))  # type: ignore[no-any-return]
 
 
 class MarketFetcher:
@@ -161,7 +161,7 @@ class OrderBookFetcher:
         """
         url = f'{self.base_url}/markets/{market_id}/orderbook'
         raw = _get(url)
-        return self._parse_order_book(market_id, raw)
+        return self._parse_order_book(market_id, raw)  # type: ignore[arg-type]
 
     def _parse_order_book(self, market_id: str, raw: dict) -> OrderBookSnapshot:
         bids_raw = raw.get('bids') or []

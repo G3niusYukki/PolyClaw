@@ -6,7 +6,6 @@ AWS Secrets Manager with fallback to environment variables.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 # boto3 is optional - mock responses when not configured
 try:
@@ -16,9 +15,9 @@ try:
     _AWS_AVAILABLE = True
 except ImportError:
     _AWS_AVAILABLE = False
-    boto3 = None  # type: ignore[assignment]
-    ClientError = None  # type: ignore[assignment, misc]
-    NoCredentialsError = Exception  # type: ignore[misc, assignment]
+    boto3 = None
+    ClientError = None
+    NoCredentialsError = Exception
 
 
 def _get_aws_client():
@@ -103,7 +102,7 @@ class SecretsManager:
                 response = client.get_secret_value(SecretId=secret_name)
                 secret = response['SecretString']
                 self._cache[secret_name] = secret
-                return secret
+                return secret  # type: ignore[no-any-return]
             except Exception:
                 # Fall through to environment variable
                 pass

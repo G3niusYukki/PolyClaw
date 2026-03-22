@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Protocol
 
 from polyclaw.config import settings
 from polyclaw.domain import MarketSnapshot
@@ -339,7 +338,7 @@ class BacktestRunner:
 
         # Annualize (assuming daily periods; ~252 trading days)
         sharpe = (mean_ret / std_dev) * (252 ** 0.5)
-        return sharpe
+        return sharpe  # type: ignore[no-any-return]
 
     def _compute_max_drawdown(self) -> float:
         """Compute maximum drawdown from equity curve."""

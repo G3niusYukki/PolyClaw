@@ -1,7 +1,5 @@
 """Tests for the OrderTracker."""
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from polyclaw.execution.tracker import OrderTracker, OrderUpdate
 
@@ -49,7 +47,7 @@ class MockFulfiller:
     def __init__(self, fill_results: list[OrderUpdate] | None = None):
         self._results = fill_results or []
         self._index = 0
-        self.cancel_calls = []
+        self.cancel_calls: list = []
 
     def check_fill(self, order):
         if self._results and self._index < len(self._results):

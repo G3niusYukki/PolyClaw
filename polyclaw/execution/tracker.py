@@ -1,13 +1,13 @@
 """Order tracking and polling for CTF order status updates."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Protocol
+from typing import Protocol
 
 from sqlalchemy.orm import Session
 
@@ -70,9 +70,9 @@ class OrderTracker:
         if self._fulfiller is None:
             # Return current state without querying CTF
             return OrderUpdate(
-                order_id=order.id,
-                client_order_id=order.client_order_id,
-                status=order.status,
+                order_id=getattr(order, 'id', 0),
+                client_order_id=getattr(order, 'client_order_id', ''),
+                status=getattr(order, 'status', 'unknown'),
                 filled_size=getattr(order, 'filled_size', 0.0),
                 avg_fill_price=getattr(order, 'avg_fill_price', 0.0),
                 updated_at=getattr(order, 'updated_at', None),
@@ -96,7 +96,7 @@ class OrderTracker:
 
             logger.debug(
                 "Order %s poll: status=%s filled_size=%.4f",
-                order.client_order_id,
+                getattr(order, 'client_order_id', 'unknown'),
                 update.status,
                 update.filled_size,
             )

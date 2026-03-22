@@ -9,9 +9,9 @@ from polyclaw.ranking import MarketRanker
 from polyclaw.repositories import create_decision, replace_evidence, upsert_market
 from polyclaw.risk import RiskEngine
 from polyclaw.safety import log_event
-from polyclaw.strategy import StrategyEngine
 from polyclaw.strategies import FeatureEngine
 from polyclaw.strategies.registry import StrategyRegistry
+from polyclaw.strategy import StrategyEngine
 
 
 class AnalysisService:
@@ -29,7 +29,7 @@ class AnalysisService:
 
     def _get_enabled_strategies(self) -> list:
         """Get enabled strategies from registry. Returns empty list if none registered."""
-        return self._registry.list_enabled()
+        return self._registry.list_enabled()  # type: ignore[no-any-return]
 
     def _generate_multi_strategy_proposals(self, market, evidences: list):
         """Generate proposals from all enabled strategies.

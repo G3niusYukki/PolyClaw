@@ -6,6 +6,9 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from polyclaw.monitoring.channels import PagerDutyChannel, TelegramChannel
+
 from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -112,7 +115,7 @@ class AlertRouter:
         Returns:
             dict mapping channel name to ChannelResponse
         """
-        results: dict[str, 'ChannelResponse'] = {}
+        results: dict[str, ChannelResponse] = {}
 
         for channel_name in alert.channels:
             if channel_name == 'telegram':
