@@ -169,7 +169,7 @@ data "aws_iam_policy_document" "cloudwatch_logs_policy" {
 }
 
 resource "aws_iam_role_policy" "cloudwatch_logs_policy" {
-  name = "${var.environment}-polyclaw-cloudwatch-logs"
-  role = aws_iam_role.ecs_task_execution_role.id
+  name   = "${var.environment}-polyclaw-cloudwatch-logs"
+  role   = aws_iam_role.ecs_task_execution_role.id
   policy = data.aws_iam_policy_document.cloudwatch_logs_policy.json
 }

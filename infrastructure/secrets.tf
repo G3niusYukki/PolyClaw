@@ -11,8 +11,8 @@ locals {
 
 # CTF Private Key — the wallet private key for signing CTF transactions on Polygon
 resource "aws_secretsmanager_secret" "ctf_private_key" {
-  name        = "polyclaw/ctf/private_key"
-  description = "Private key for CTF wallet on Polygon (used for signing transactions)"
+  name                    = "polyclaw/ctf/private_key"
+  description             = "Private key for CTF wallet on Polygon (used for signing transactions)"
   recovery_window_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -26,14 +26,14 @@ resource "aws_secretsmanager_secret_version" "ctf_private_key" {
   # The actual secret value should be set via AWS Console, CLI, or another secret source
   # terraform apply will not set the actual private key value
   secret_string = jsonencode({
-    private_key = ""  # Placeholder — set via aws_secretsmanager_secret_version after initial creation
+    private_key = "" # Placeholder — set via aws_secretsmanager_secret_version after initial creation
   })
 }
 
 # Polymarket API Key — for authenticated Polymarket API calls
 resource "aws_secretsmanager_secret" "polymarket_api_key" {
-  name        = "polyclaw/polymarket/api_key"
-  description = "Polymarket API key for authenticated market data and order operations"
+  name                    = "polyclaw/polymarket/api_key"
+  description             = "Polymarket API key for authenticated market data and order operations"
   recovery_window_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -45,14 +45,14 @@ resource "aws_secretsmanager_secret" "polymarket_api_key" {
 resource "aws_secretsmanager_secret_version" "polymarket_api_key" {
   secret_id = aws_secretsmanager_secret.polymarket_api_key.id
   secret_string = jsonencode({
-    api_key = ""  # Placeholder
+    api_key = "" # Placeholder
   })
 }
 
 # Telegram Bot Token — for sending execution and alert notifications
 resource "aws_secretsmanager_secret" "telegram_bot_token" {
-  name        = "polyclaw/telegram/bot_token"
-  description = "Telegram bot token for sending notifications to trading channels"
+  name                    = "polyclaw/telegram/bot_token"
+  description             = "Telegram bot token for sending notifications to trading channels"
   recovery_window_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -64,14 +64,14 @@ resource "aws_secretsmanager_secret" "telegram_bot_token" {
 resource "aws_secretsmanager_secret_version" "telegram_bot_token" {
   secret_id = aws_secretsmanager_secret.telegram_bot_token.id
   secret_string = jsonencode({
-    bot_token = ""  # Placeholder
+    bot_token = "" # Placeholder
   })
 }
 
 # Resource policy: allow Lambda functions to read secrets
 data "aws_iam_policy_document" "secrets_read" {
   statement {
-    sid = "AllowLambdaReadSecrets"
+    sid    = "AllowLambdaReadSecrets"
     effect = "Allow"
     actions = [
       "secretsmanager:GetSecretValue",

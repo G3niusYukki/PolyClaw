@@ -17,7 +17,7 @@ resource "aws_cloudwatch_event_target" "ingestion_lambda" {
   target_id = "polyclaw-ingestion-lambda"
   rule      = aws_cloudwatch_event_rule.ingestion_schedule.name
   arn       = aws_lambda_function.ingestion.arn
-  input     = jsonencode({ "source": "aws.events", "detail-type": "Scheduled Event" })
+  input     = jsonencode({ "source" : "aws.events", "detail-type" : "Scheduled Event" })
 }
 
 resource "aws_lambda_permission" "allow_eventbridge" {

@@ -199,18 +199,18 @@ resource "aws_kms_alias" "s3_replication" {
 # =============================================================================
 
 resource "aws_db_instance" "polyclaw_replica" {
-  count                          = var.environment == "prod" ? 1 : 0
-  identifier                     = "polyclaw-db-replica"
-  engine                         = "postgres"
-  engine_version                 = "16.4"
-  instance_class                 = var.db_instance_class
-  replicate_source_db            = aws_db_instance.polyclaw.identifier
-  db_subnet_group_name           = aws_db_subnet_group.polyclaw.name
-  vpc_security_group_ids         = [aws_security_group.polyclaw_rds.id]
-  publicly_accessible            = false
-  storage_encrypted              = true
-  performance_insights_enabled   = true
-  auto_minor_version_upgrade     = false
+  count                        = var.environment == "prod" ? 1 : 0
+  identifier                   = "polyclaw-db-replica"
+  engine                       = "postgres"
+  engine_version               = "16.4"
+  instance_class               = var.db_instance_class
+  replicate_source_db          = aws_db_instance.polyclaw.identifier
+  db_subnet_group_name         = aws_db_subnet_group.polyclaw.name
+  vpc_security_group_ids       = [aws_security_group.polyclaw_rds.id]
+  publicly_accessible          = false
+  storage_encrypted            = true
+  performance_insights_enabled = true
+  auto_minor_version_upgrade   = false
 
   tags = merge(local.dr_tags, {
     Role = "read-replica"
@@ -222,8 +222,8 @@ resource "aws_db_instance" "polyclaw_replica" {
 # =============================================================================
 
 resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
-  count              = var.environment == "prod" ? 1 : 0
-  alarm_name         = "polyclaw-rds-high-cpu"
+  count               = var.environment == "prod" ? 1 : 0
+  alarm_name          = "polyclaw-rds-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
   metric_name         = "CPUUtilization"
@@ -240,15 +240,15 @@ resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_low_storage" {
-  count              = var.environment == "prod" ? 1 : 0
-  alarm_name         = "polyclaw-rds-low-storage"
+  count               = var.environment == "prod" ? 1 : 0
+  alarm_name          = "polyclaw-rds-low-storage"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
   metric_name         = "FreeStorageSpace"
   namespace           = "AWS/RDS"
   period              = 300
   statistic           = "Minimum"
-  threshold           = 5368709120  # 5GB
+  threshold           = 5368709120 # 5GB
   alarm_description   = "RDS free storage below 5GB"
   alarm_actions       = [aws_sns_topic.dr_alerts[0].arn]
 

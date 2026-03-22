@@ -70,15 +70,15 @@ resource "aws_lambda_function" "ingestion" {
   source_code_hash = filebase64sha256("lambda/ingestion/deployment.zip")
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.12"
-  timeout          = 300  # 5 minutes
+  timeout          = 300 # 5 minutes
   memory_size      = 256
 
   environment {
     variables = {
-      DATABASE_URL       = var.db_password != "" ? "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.polyclaw.endpoint}/${var.db_name}" : "sqlite:///./polyclaw.db"
-      ENVIRONMENT        = var.environment
-      S3_BUCKET_DATA     = aws_s3_bucket.polyclaw_data.id
-      S3_BUCKET_LOGS     = aws_s3_bucket.polyclaw_logs.id
+      DATABASE_URL   = var.db_password != "" ? "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.polyclaw.endpoint}/${var.db_name}" : "sqlite:///./polyclaw.db"
+      ENVIRONMENT    = var.environment
+      S3_BUCKET_DATA = aws_s3_bucket.polyclaw_data.id
+      S3_BUCKET_LOGS = aws_s3_bucket.polyclaw_logs.id
     }
   }
 

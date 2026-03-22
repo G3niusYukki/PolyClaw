@@ -5,12 +5,12 @@
 
 resource "aws_lb" "polyclaw" {
   name               = "${var.environment}-polyclaw-alb"
-  internal           = false  # Public-facing for MVP; use internal for production
+  internal           = false # Public-facing for MVP; use internal for production
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = var.public_subnet_ids
 
-  enable_deletion_protection = false  # Set true in production
+  enable_deletion_protection = false # Set true in production
 
   tags = {
     Environment = var.environment
@@ -72,7 +72,7 @@ resource "aws_lb_target_group" "ingestion" {
   vpc_id   = var.vpc_id
 
   deregistration_delay = 30
-  target_type         = "ip"
+  target_type          = "ip"
 
   health_check {
     enabled             = true
@@ -97,7 +97,7 @@ resource "aws_lb_target_group" "strategy_engine" {
   vpc_id   = var.vpc_id
 
   deregistration_delay = 30
-  target_type         = "ip"
+  target_type          = "ip"
 
   health_check {
     enabled             = true
@@ -122,7 +122,7 @@ resource "aws_lb_target_group" "execution" {
   vpc_id   = var.vpc_id
 
   deregistration_delay = 30
-  target_type         = "ip"
+  target_type          = "ip"
 
   health_check {
     enabled             = true
@@ -147,7 +147,7 @@ resource "aws_lb_target_group" "monitor" {
   vpc_id   = var.vpc_id
 
   deregistration_delay = 30
-  target_type         = "ip"
+  target_type          = "ip"
 
   health_check {
     enabled             = true

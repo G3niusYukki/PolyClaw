@@ -39,8 +39,8 @@ resource "aws_ecs_task_definition" "ingestion_service" {
   family                   = "${var.environment}-polyclaw-ingestion"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"   # 0.5 vCPU
-  memory                   = "1024"  # 1 GB
+  cpu                      = "512"  # 0.5 vCPU
+  memory                   = "1024" # 1 GB
 
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn      = aws_iam_role.ecs_task_role.arn
@@ -333,7 +333,7 @@ resource "aws_security_group" "ecs_services" {
       from_port   = 8080
       to_port     = 8080
       protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16"]  # VPC CIDR
+      cidr_blocks = ["10.0.0.0/16"] # VPC CIDR
     }
   ]
 

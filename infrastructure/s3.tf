@@ -140,12 +140,12 @@ resource "aws_cloudtrail" "polyclaw" {
   count = var.environment == "prod" ? 1 : 0
   name  = "polyclaw-cloudtrail"
 
-  s3_bucket_name = aws_s3_bucket.polyclaw_cloudtrail[0].id
+  s3_bucket_name        = aws_s3_bucket.polyclaw_cloudtrail[0].id
   is_multi_region_trail = false
-  enable_logging = true
+  enable_logging        = true
 
   event_selector {
-    read_write_type = "All"
+    read_write_type           = "All"
     include_management_events = true
   }
 }

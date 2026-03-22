@@ -126,16 +126,16 @@ resource "aws_db_instance" "polyclaw" {
 
   parameter_group_name = aws_db_parameter_group.polyclaw.name
 
-  multi_az               = false
-  publicly_accessible   = false
-  skip_final_snapshot    = true
-  deletion_protection    = false  # Set to true in prod
+  multi_az            = false
+  publicly_accessible = false
+  skip_final_snapshot = true
+  deletion_protection = false # Set to true in prod
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
 
-  performance_insights_enabled = true
+  performance_insights_enabled   = true
   enable_cloudwatch_logs_exports = ["postgresql"]
 
   tags = {
@@ -169,7 +169,7 @@ resource "aws_subnet" "polyclaw_private" {
 }
 
 resource "aws_internet_gateway" "polyclaw" {
-  count = length(var.vpc_id) > 0 ? 0 : 1
+  count  = length(var.vpc_id) > 0 ? 0 : 1
   vpc_id = aws_vpc.polyclaw[0].id
 
   tags = {
@@ -178,7 +178,7 @@ resource "aws_internet_gateway" "polyclaw" {
 }
 
 resource "aws_route_table" "polyclaw_private" {
-  count = length(var.vpc_id) > 0 || length(var.private_subnet_ids) > 0 ? 0 : 1
+  count  = length(var.vpc_id) > 0 || length(var.private_subnet_ids) > 0 ? 0 : 1
   vpc_id = aws_vpc.polyclaw[0].id
 
   route {
@@ -192,7 +192,7 @@ resource "aws_route_table" "polyclaw_private" {
 }
 
 resource "aws_eip" "polyclaw_nat" {
-  count = length(var.vpc_id) > 0 || length(var.private_subnet_ids) > 0 ? 0 : 1
+  count  = length(var.vpc_id) > 0 || length(var.private_subnet_ids) > 0 ? 0 : 1
   domain = "vpc"
 
   tags = {
