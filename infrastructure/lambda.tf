@@ -89,7 +89,6 @@ resource "aws_lambda_function" "ingestion" {
 
   depends_on = [
     aws_iam_role_policy.ingestion_lambda_policy,
-    aws_cloudwatch_event_target.ingestion_lambda,
   ]
 
   tags = {
