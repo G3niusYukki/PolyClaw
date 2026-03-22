@@ -1,14 +1,6 @@
 # AWS Secrets Manager resources for PolyClaw secrets
 # Stores sensitive credentials used by the application
 
-locals {
-  common_tags = {
-    Project     = "polyclaw"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  }
-}
-
 # CTF Private Key — the wallet private key for signing CTF transactions on Polygon
 resource "aws_secretsmanager_secret" "ctf_private_key" {
   name                    = "polyclaw/ctf/private_key"
