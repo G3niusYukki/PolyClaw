@@ -9,12 +9,12 @@ This package contains the core execution infrastructure:
 - Staged position sizing
 - Market whitelist management
 """
-from polyclaw.execution.state import OrderStateMachine, OrderState
-from polyclaw.execution.orders import OrderType, OrderSpec
+from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.execution.price_bands import PriceBandValidator
-from polyclaw.execution.retry import retry, RetryableError, NonRetryableError
-from polyclaw.execution.tracker import OrderTracker, OrderUpdate, get_tracker
+from polyclaw.execution.retry import NonRetryableError, RetryableError, retry
 from polyclaw.execution.staged_size import StagedPositionSizer, TradingStage
+from polyclaw.execution.state import OrderState, OrderStateMachine
+from polyclaw.execution.tracker import OrderTracker, OrderUpdate, get_tracker
 from polyclaw.execution.whitelist import MarketWhitelist
 
 __all__ = [

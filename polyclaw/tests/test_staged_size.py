@@ -1,10 +1,9 @@
 """Tests for staged position sizing (Week 9.1)."""
 
-import pytest
 
 from polyclaw.config import settings
-from polyclaw.models import Position, ShadowResult, TradingStageRecord
 from polyclaw.execution.staged_size import StagedPositionSizer, TradingStage
+from polyclaw.models import ShadowResult, TradingStageRecord
 from polyclaw.timeutils import utcnow
 
 

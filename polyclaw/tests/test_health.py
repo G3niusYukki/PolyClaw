@@ -2,9 +2,10 @@
 Tests for the health check module.
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 from polyclaw.monitoring.health import (
     ComponentHealth,
@@ -13,7 +14,6 @@ from polyclaw.monitoring.health import (
     HealthStatus,
 )
 from polyclaw.timeutils import utcnow
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

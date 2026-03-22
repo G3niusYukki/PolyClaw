@@ -2,9 +2,7 @@
 
 from datetime import timedelta
 
-import pytest
-
-from polyclaw.models import ShadowResult, Position
+from polyclaw.models import ShadowResult
 from polyclaw.shadow.transition import LiveTransitionManager
 from polyclaw.timeutils import utcnow
 

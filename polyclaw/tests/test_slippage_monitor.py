@@ -2,8 +2,7 @@
 
 import pytest
 
-from polyclaw.scaling.slippage_monitor import SlippageMonitor, SlippageRecord
-from polyclaw.timeutils import utcnow
+from polyclaw.scaling.slippage_monitor import SlippageMonitor
 
 
 class TestSlippageMonitor:

@@ -2,8 +2,6 @@
 import uuid
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.providers.ctf import PolymarketCTFProvider
 

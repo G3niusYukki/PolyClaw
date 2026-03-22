@@ -8,7 +8,6 @@ from sqlalchemy import select
 from polyclaw.execution.whitelist import MarketWhitelist
 from polyclaw.models import Market, MarketWhitelistRecord
 from polyclaw.safety import log_event
-from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

@@ -6,13 +6,11 @@ date range and persisting them to the database.
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Generator
 
 from sqlalchemy.orm import Session
 
 from polyclaw.domain import MarketSnapshot, OrderBookSnapshot, Trade
 from polyclaw.ingestion.fetchers import MarketFetcher, OrderBookFetcher, TradeFetcher
-from polyclaw.repositories import upsert_market
 
 logger = logging.getLogger(__name__)
 

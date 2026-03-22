@@ -36,7 +36,6 @@ class PortfolioRiskEngine:
         - rejection_reasons: list of reasons for rejection
         - adjusted_stake: capped stake if partial approval, None otherwise
         """
-        from polyclaw.models import Position
 
         rejection_reasons: list[str] = []
         adjusted_stake: float | None = None

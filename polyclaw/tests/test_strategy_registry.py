@@ -1,6 +1,5 @@
-import pytest
 
-from polyclaw.strategies.base import BaseStrategy, Side, Signal
+from polyclaw.strategies.base import BaseStrategy
 from polyclaw.strategies.registry import (
     StrategyRegistry,
     get_strategy,

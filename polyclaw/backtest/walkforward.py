@@ -1,8 +1,8 @@
 """Walk-forward validation for strategy robustness testing."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from polyclaw.backtest.runner import BacktestResult, BacktestRunner
+from polyclaw.backtest.runner import BacktestRunner
 from polyclaw.domain import MarketSnapshot
 from polyclaw.strategies.base import BaseStrategy
 

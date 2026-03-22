@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from polyclaw.models import Position, ShadowResult
 from polyclaw.timeutils import utcnow

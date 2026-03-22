@@ -1,6 +1,5 @@
 from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
 
-
 SAMPLE = [{
     'id': '123',
     'question': 'Will example happen?',

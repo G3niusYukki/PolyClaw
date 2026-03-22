@@ -1,10 +1,8 @@
-from datetime import timedelta
 
 import pytest
 
 from polyclaw.domain import MarketSnapshot
 from polyclaw.strategies.base import BaseStrategy, Side, Signal
-from polyclaw.timeutils import utcnow
 
 
 class DummyStrategy(BaseStrategy):

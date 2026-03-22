@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from polyclaw.execution.orders import OrderSpec
 
-
 # Platform fee rates (configurable)
 FEE_RATE_AMM = 0.00  # 0% for AMM/CLOB venues
 FEE_RATE_ORDER_BOOK = 0.01  # 1% for order book

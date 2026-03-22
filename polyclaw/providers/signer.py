@@ -6,7 +6,6 @@ a private key from AWS Secrets Manager or an environment variable.
 from __future__ import annotations
 
 import hashlib
-import os
 from typing import Any
 
 from polyclaw.secrets import secrets_manager

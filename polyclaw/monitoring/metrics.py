@@ -3,8 +3,6 @@
 import logging
 from typing import Any
 
-from polyclaw.config import settings
-
 logger = logging.getLogger(__name__)
 
 # Pre-defined metric names (matching CloudWatch alarm definitions)

@@ -3,8 +3,6 @@
 import json
 from datetime import datetime
 
-import pytest
-
 from polyclaw.backtest.reports import PerformanceReport
 from polyclaw.backtest.runner import BacktestResult, TradeRecord
 
@@ -152,7 +150,7 @@ def test_report_empty_trades():
 
 
 def test_report_avg_holding_period():
-    from datetime import datetime, timedelta
+    from datetime import datetime
     reporter = PerformanceReport()
     trades = [
         TradeRecord(

@@ -1,8 +1,6 @@
 """Tests for the PolymarketCTFProvider."""
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.providers.signer import WalletSigner
 

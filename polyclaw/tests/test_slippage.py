@@ -1,8 +1,7 @@
 """Tests for the slippage model."""
 
-import pytest
 
-from polyclaw.backtest.slippage import SlippageModel, SlippageEstimate
+from polyclaw.backtest.slippage import SlippageEstimate, SlippageModel
 
 
 class TestSlippageModel:

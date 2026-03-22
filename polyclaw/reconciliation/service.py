@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from polyclaw.models import Order, Position
 from polyclaw.reconciliation.alerts import DriftAlerts
-from polyclaw.reconciliation.detector import DetectionResult, DiscrepancyDetector
+from polyclaw.reconciliation.detector import DiscrepancyDetector
 from polyclaw.reconciliation.types import DiscrepancyItem, PositionSummary, ReconciliationReport
 from polyclaw.safety import log_event
 from polyclaw.timeutils import utcnow

@@ -54,7 +54,6 @@ class OrderSpec:
         Returns:
             A dict suitable for signing and submitting as a JSON-RPC call.
         """
-        from polyclaw.providers.signer import get_signer
         import uuid
 
         # Determine if this is a buy or sell based on side

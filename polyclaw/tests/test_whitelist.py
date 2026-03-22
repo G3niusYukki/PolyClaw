@@ -2,7 +2,7 @@
 
 import pytest
 
-from polyclaw.execution.whitelist import MarketWhitelist, WhitelistCheck
+from polyclaw.execution.whitelist import MarketWhitelist
 
 
 class TestMarketWhitelist:

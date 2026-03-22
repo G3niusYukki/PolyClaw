@@ -1,5 +1,4 @@
 """Tests for price band validation."""
-import pytest
 
 from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.execution.price_bands import PriceBandValidator

@@ -1,6 +1,5 @@
 """PolyClaw monitoring package: metrics, alerting, anomaly detection, health checks, and PnL reporting."""
 
-from polyclaw.monitoring.metrics import MetricsCollector
 from polyclaw.monitoring.alerts import Alert, AlertRouter, AlertSeverity
 from polyclaw.monitoring.anomaly import AnomalyDetector, AnomalyResult, AnomalySeverity
 from polyclaw.monitoring.health import (
@@ -9,6 +8,7 @@ from polyclaw.monitoring.health import (
     HealthChecker,
     HealthStatus,
 )
+from polyclaw.monitoring.metrics import MetricsCollector
 from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter
 
 __all__ = [

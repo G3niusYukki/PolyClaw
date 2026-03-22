@@ -25,9 +25,10 @@ def fresh_default_db(tmp_path):
     Uses a fresh temp SQLite file per test session so all new columns
     (is_shadow, strategy_id, status_history, retry_count, etc.) are present.
     """
-    import polyclaw.db as db_module
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+
+    import polyclaw.db as db_module
 
     # Use a temp file-based SQLite so it's thread-safe and fresh per test
     tmp_db = tmp_path / 'test.db'

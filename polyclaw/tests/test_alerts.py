@@ -1,8 +1,8 @@
 """Tests for alert routing and notification channels."""
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import requests
-from unittest.mock import patch, MagicMock
 
 from polyclaw.monitoring.alerts import Alert, AlertRouter, AlertSeverity
 from polyclaw.monitoring.channels import ChannelResponse, PagerDutyChannel, TelegramChannel

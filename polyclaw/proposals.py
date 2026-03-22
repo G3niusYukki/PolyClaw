@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from polyclaw.domain import EvidenceItem, MarketSnapshot
-from polyclaw.ranking import RankedMarket
 
 
 @dataclass

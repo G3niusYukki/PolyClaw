@@ -1,4 +1,4 @@
-from polyclaw.domain import EvidenceItem, MarketSnapshot
+from polyclaw.domain import EvidenceItem
 from polyclaw.ranking import RankedMarket
 
 

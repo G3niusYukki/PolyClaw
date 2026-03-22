@@ -2,13 +2,11 @@
 
 from datetime import timedelta
 
-import pytest
-
 from polyclaw.config import settings
 from polyclaw.domain import MarketSnapshot
 from polyclaw.models import Position, ShadowResult
 from polyclaw.shadow.mode import ShadowModeEngine, ShadowPosition, process_shadow_signals
-from polyclaw.strategies.base import Signal, Side
+from polyclaw.strategies.base import Side, Signal
 from polyclaw.timeutils import utcnow
 
 
@@ -221,10 +219,8 @@ class TestProcessShadowSignals:
 class TestShadowModeToggle:
     def test_shadow_mode_disabled_uses_real_execution(self, db_session):
         """When shadow_mode_enabled=False, ExecutionService uses real path."""
-        from polyclaw.config import settings
-        from polyclaw.models import Decision, Market
-        from polyclaw.repositories import upsert_market
         from polyclaw.domain import DecisionProposal
+        from polyclaw.repositories import upsert_market
 
         # Create a market and decision
         market = upsert_market(
@@ -278,10 +274,8 @@ class TestShadowModeToggle:
 
     def test_shadow_mode_enabled_uses_shadow_path(self, db_session, sample_market):
         """When shadow_mode_enabled=True, ExecutionService uses shadow path."""
-        from polyclaw.config import settings
-        from polyclaw.models import Decision, Market
-        from polyclaw.repositories import upsert_market
         from polyclaw.domain import DecisionProposal
+        from polyclaw.repositories import upsert_market
 
         market = upsert_market(db_session, sample_market)
 

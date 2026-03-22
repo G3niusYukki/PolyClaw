@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 from sqlalchemy import create_engine
@@ -7,23 +7,19 @@ from sqlalchemy.orm import sessionmaker
 from polyclaw.db import Base
 from polyclaw.domain import MarketSnapshot
 from polyclaw.models import Order, Position
-from polyclaw.risk.portfolio import PortfolioRiskDecision, PortfolioRiskEngine
-from polyclaw.risk.clusters import ClusterExposure, EventClusterTracker, extract_cluster_from_title
-from polyclaw.risk.sizing import KellyPositionSizer, KellyResult
+from polyclaw.risk.clusters import EventClusterTracker, extract_cluster_from_title
 from polyclaw.risk.config import (
-    GlobalLimits,
-    MarketQualityLimits,
-    PortfolioLimits,
     RiskConfig,
-    StrategyLimits,
     load_risk_config,
 )
+from polyclaw.risk.portfolio import PortfolioRiskEngine
+from polyclaw.risk.sizing import KellyPositionSizer
 from polyclaw.safety import (
     GlobalCircuitBreaker,
     StrategyCircuitBreaker,
     _circuit_state,
 )
-from polyclaw.strategies.base import BaseStrategy, Signal, Side
+from polyclaw.strategies.base import BaseStrategy, Side, Signal
 from polyclaw.timeutils import utcnow
 
 

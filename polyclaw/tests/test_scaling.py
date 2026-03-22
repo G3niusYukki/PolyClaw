@@ -1,19 +1,18 @@
 """Tests for scaling manager, performance evaluator, market expansion, and fee calculator."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from polyclaw.db import Base
-from polyclaw.execution.staged_size import TradingStage
-from polyclaw.models import Market, MarketWhitelistRecord, ShadowResult, TradingStageRecord
-from polyclaw.scaling.evaluator import PerformanceEvaluator
-from polyclaw.scaling.manager import ScalingManager
-from polyclaw.scaling.expansion import MarketExpander, MarketExpansionSuggestion
-from polyclaw.scaling.fee_calculator import FeeBreakdown, FeeCalculator
 from polyclaw.execution.orders import OrderSpec, OrderType
+from polyclaw.models import Market, MarketWhitelistRecord, ShadowResult
+from polyclaw.scaling.evaluator import PerformanceEvaluator
+from polyclaw.scaling.expansion import MarketExpander
+from polyclaw.scaling.fee_calculator import FeeBreakdown, FeeCalculator
+from polyclaw.scaling.manager import ScalingManager
 from polyclaw.timeutils import utcnow
 
 

@@ -1,8 +1,6 @@
 """Tests for walk-forward validation."""
 
-from datetime import date, timedelta
-
-import pytest
+from datetime import timedelta
 
 from polyclaw.backtest.walkforward import WalkForwardResult, WalkForwardValidator, WindowResult
 from polyclaw.domain import MarketSnapshot

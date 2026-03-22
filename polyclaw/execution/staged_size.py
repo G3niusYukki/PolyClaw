@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from polyclaw.config import settings
-from polyclaw.models import ShadowResult, TradingStageRecord
+from polyclaw.models import TradingStageRecord
 from polyclaw.safety import GlobalCircuitBreaker, log_event
 from polyclaw.shadow.accuracy import SignalAccuracyMonitor
-from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

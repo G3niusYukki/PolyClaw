@@ -9,7 +9,7 @@ and kill switch status. Results are returned as a structured HealthStatus.
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import select, text

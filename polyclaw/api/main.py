@@ -4,7 +4,17 @@ from sqlalchemy.orm import Session
 
 from polyclaw.config import settings
 from polyclaw.db import Base, engine, get_session
-from polyclaw.models import Decision, Market, Position, AuditLog, ProposalRecord, ShadowResult
+from polyclaw.models import AuditLog, Decision, Market, Position, ProposalRecord, ShadowResult
+
+# Monitoring imports
+from polyclaw.monitoring.health import HealthChecker as _HealthChecker
+from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter
+
+# Reconciliation imports
+from polyclaw.providers.ctf import PolymarketCTFProvider
+from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
+from polyclaw.reconciliation.service import ReconciliationService
+from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.schemas import (
     ApprovalResponse,
     DecisionOut,
@@ -18,23 +28,13 @@ from polyclaw.schemas import (
     ScanResponse,
 )
 from polyclaw.services.analysis import AnalysisService
-from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
 from polyclaw.services.runner import RunnerService
 from polyclaw.shadow.accuracy import SignalAccuracyMonitor
 from polyclaw.shadow.mode import ShadowModeEngine
 from polyclaw.shadow.transition import LiveTransitionManager
-from polyclaw.workflow import ProposalWorkflowService
-from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter
 from polyclaw.timeutils import utcnow
-
-# Reconciliation imports
-from polyclaw.providers.ctf import PolymarketCTFProvider
-from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
-from polyclaw.reconciliation.service import ReconciliationService
-
-# Monitoring imports
-from polyclaw.monitoring.health import ComponentHealth as _ComponentHealth, ComponentStatus as _ComponentStatus, HealthChecker as _HealthChecker, HealthStatus as _HealthStatus
+from polyclaw.workflow import ProposalWorkflowService
 
 app = FastAPI(title='PolyClaw')
 Base.metadata.create_all(bind=engine)
@@ -222,7 +222,7 @@ def materialize_proposal(market_id: str, session: Session = Depends(get_session)
     if not match:
         raise HTTPException(status_code=404, detail='tradable_proposal_not_found')
     from polyclaw.domain import DecisionProposal
-    from polyclaw.repositories import upsert_market, replace_evidence, create_decision
+    from polyclaw.repositories import create_decision, replace_evidence, upsert_market
     market_record = next((m for m in session.scalars(select(Market).where(Market.market_id == market_id)).all()), None)
     if market_record is None:
         market_record = upsert_market(session, match.market)
@@ -294,8 +294,9 @@ def disable_kill_switch(reason: str = 'manual resume', session: Session = Depend
 @app.get('/shadow/results')
 def shadow_results(window_days: int = 30, session: Session = Depends(get_session)):
     """List shadow trading results with accuracy data."""
-    from polyclaw.timeutils import utcnow
     from datetime import timedelta
+
+    from polyclaw.timeutils import utcnow
 
     cutoff = utcnow() - timedelta(days=window_days)
     rows = session.scalars(

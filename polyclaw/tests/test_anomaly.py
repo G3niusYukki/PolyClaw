@@ -2,17 +2,16 @@
 Tests for the anomaly detection module.
 """
 
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from polyclaw.monitoring.anomaly import (
     AnomalyDetector,
     AnomalyResult,
     AnomalySeverity,
 )
-from polyclaw.timeutils import utcnow
-
 
 # ---------------------------------------------------------------------------
 # Helper: lightweight row-like object for SQLAlchemy results

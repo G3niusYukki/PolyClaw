@@ -63,12 +63,12 @@ class ScalingManager:
 
         # Check if already at max stage
         if stage >= TradingStage.STAGE4_100PCT:
-            return False, f'already at maximum stage (STAGE4_100PCT / 100%)'
+            return False, 'already at maximum stage (STAGE4_100PCT / 100%)'
 
         # Check all criteria
         blockers = []
         if not criteria['profitable_14d']:
-            blockers.append(f'not profitable over 14d')
+            blockers.append('not profitable over 14d')
         if criteria['sharpe_ratio'] is not None and criteria['sharpe_ratio'] <= self._evaluator.sharpe_threshold:
             blockers.append(f'Sharpe={criteria["sharpe_ratio"]:.2f} <= {self._evaluator.sharpe_threshold}')
         if criteria['drawdown_pct'] > self._evaluator.drawdown_threshold:

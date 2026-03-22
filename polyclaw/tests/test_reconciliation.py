@@ -2,20 +2,18 @@
 Tests for the reconciliation package.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from polyclaw.reconciliation.alerts import DriftAlerts, DriftSeverity
 from polyclaw.reconciliation.detector import (
-    Discrepancy,
     DiscrepancyCategory,
     DiscrepancyDetector,
-    DetectionResult,
 )
-from polyclaw.reconciliation.alerts import DriftAlerts, DriftSeverity
 from polyclaw.reconciliation.service import ReconciliationService
 from polyclaw.reconciliation.types import DiscrepancyItem, PositionSummary, ReconciliationReport
 from polyclaw.timeutils import utcnow
-
 
 # ---------------------------------------------------------------------------
 # Helper fixtures

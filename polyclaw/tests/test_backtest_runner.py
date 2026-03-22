@@ -2,12 +2,9 @@
 
 from datetime import date, datetime, timedelta
 
-import pytest
-
-from polyclaw.backtest.runner import BacktestRunner, BacktestResult, PositionRecord, TradeRecord
+from polyclaw.backtest.runner import BacktestResult, BacktestRunner
 from polyclaw.domain import MarketSnapshot
 from polyclaw.strategies.base import BaseStrategy, Side, Signal
-from polyclaw.strategies.registry import StrategyRegistry
 from polyclaw.timeutils import utcnow
 
 

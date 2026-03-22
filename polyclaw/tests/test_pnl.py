@@ -1,14 +1,14 @@
 """Tests for PnL attribution and reporting."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from polyclaw.db import Base
-from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter, PnLSummary
-from polyclaw.models import Position, ShadowResult
+from polyclaw.models import ShadowResult
+from polyclaw.monitoring.pnl import DailyReportGenerator, PnLReporter
 from polyclaw.timeutils import utcnow
 
 

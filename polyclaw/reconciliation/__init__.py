@@ -11,7 +11,12 @@ detecting discrepancies, and triggering auto-close / alerts when drift is detect
 """
 
 from polyclaw.reconciliation.alerts import DriftAlerts
-from polyclaw.reconciliation.detector import Discrepancy, DiscrepancyCategory, DiscrepancyDetector, DetectionResult
+from polyclaw.reconciliation.detector import (
+    DetectionResult,
+    Discrepancy,
+    DiscrepancyCategory,
+    DiscrepancyDetector,
+)
 from polyclaw.reconciliation.service import ReconciliationService
 from polyclaw.reconciliation.types import DiscrepancyItem, PositionSummary, ReconciliationReport
 

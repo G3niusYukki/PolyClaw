@@ -1,7 +1,7 @@
 """Smoke tests for the ingestion package."""
 
-from datetime import date, datetime
-from unittest.mock import MagicMock, patch
+from datetime import date
+from unittest.mock import MagicMock
 
 from polyclaw.db import Base
 from polyclaw.ingestion import BackfillRunner, MarketFetcher, OrderBookFetcher, TradeFetcher

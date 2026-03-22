@@ -8,15 +8,14 @@ reported via the AlertRouter for CRITICAL anomalies.
 import logging
 import statistics
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
-from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from polyclaw.models import AuditLog, Market, Order
-from polyclaw.monitoring.alerts import Alert, AlertRouter, AlertSeverity
+from polyclaw.models import Market, Order
+from polyclaw.monitoring.alerts import AlertRouter
 from polyclaw.timeutils import utcnow
 
 logger = logging.getLogger(__name__)

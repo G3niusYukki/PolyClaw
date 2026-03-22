@@ -2,17 +2,16 @@
 import time
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
-import httpx
-
 from polyclaw.execution.retry import (
-    retry,
-    RetryableError,
-    NonRetryableError,
     InsufficientBalanceError,
     MarketClosedError,
+    NonRetryableError,
+    RetryableError,
     _is_retryable,
+    retry,
 )
 
 
@@ -151,7 +150,6 @@ class TestRetryDecorator:
 
     def test_exponential_backoff_delays(self):
         """Delays increase exponentially with each retry."""
-        import time
 
         call_times: list[float] = []
 
@@ -173,7 +171,6 @@ class TestRetryDecorator:
 
     def test_max_delay_cap(self):
         """Delays are capped at max_delay."""
-        import time
 
         call_times: list[float] = []
 

@@ -2,10 +2,8 @@
 
 from datetime import timedelta
 
-import pytest
-
 from polyclaw.models import Position, ShadowResult
-from polyclaw.shadow.accuracy import SignalAccuracyMonitor, ShadowResultRecord
+from polyclaw.shadow.accuracy import SignalAccuracyMonitor
 from polyclaw.timeutils import utcnow
 
 

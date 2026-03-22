@@ -5,10 +5,8 @@ These dataclasses are used across detector.py, service.py, and alerts.py
 and are kept in a separate module to avoid circular imports.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-
-from polyclaw.timeutils import utcnow
 
 
 @dataclass
