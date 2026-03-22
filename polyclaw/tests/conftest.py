@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from polyclaw.db import Base
 from polyclaw.domain import MarketSnapshot
@@ -14,6 +16,31 @@ def reset_registry():
     StrategyRegistry.reset()
     yield
     StrategyRegistry.reset()
+
+
+@pytest.fixture
+def db_session():
+    """Create a fresh in-memory SQLite database for each test.
+
+    Uses an in-memory database to ensure complete isolation between tests.
+    Patches db.engine and db.SessionLocal for the duration of the test.
+    """
+    # Create a fresh in-memory engine for this test
+    test_engine = create_engine('sqlite:///:memory:', future=True)
+    TestSessionLocal = sessionmaker(bind=test_engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    # Create all tables in the test database
+    Base.metadata.create_all(bind=test_engine)
+
+    # Provide the session
+    session = TestSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
+
 
 
 @pytest.fixture

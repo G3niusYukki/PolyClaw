@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from polyclaw.db import Base
@@ -68,6 +68,17 @@ class Decision(Base):
 class Order(Base):
     __tablename__ = 'orders'
 
+    # Order state constants
+    STATUS_CREATED = 'created'
+    STATUS_SUBMITTED = 'submitted'
+    STATUS_ACKNOWLEDGED = 'acknowledged'
+    STATUS_PARTIAL_FILL = 'partial_fill'
+    STATUS_FILLED = 'filled'
+    STATUS_CANCELING = 'canceling'
+    STATUS_CANCELED = 'canceled'
+    STATUS_REJECTED = 'rejected'
+    STATUS_FAILED = 'failed'
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     decision_id_fk: Mapped[int] = mapped_column(ForeignKey('decisions.id'))
     client_order_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
@@ -78,6 +89,9 @@ class Order(Base):
     notional_usd: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(32), default='submitted')
     venue_order_id: Mapped[str] = mapped_column(String(128), default='')
+    status_history: Mapped[list | None] = mapped_column(JSON, default=list)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     decision: Mapped['Decision'] = relationship(back_populates='orders')
@@ -95,6 +109,8 @@ class Position(Base):
     quantity: Mapped[float] = mapped_column(Float)
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     is_open: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_shadow: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    strategy_id: Mapped[str] = mapped_column(String(128), default='', index=True)
 
 
 class AuditLog(Base):
@@ -124,3 +140,37 @@ class ProposalRecord(Base):
     status: Mapped[str] = mapped_column(String(32), default='new', index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class ShadowResult(Base):
+    __tablename__ = 'shadow_results'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    strategy_id: Mapped[str] = mapped_column(String(128), index=True)
+    predicted_side: Mapped[str] = mapped_column(String(8))
+    predicted_prob: Mapped[float] = mapped_column(Float)
+    shadow_fill_price: Mapped[float] = mapped_column(Float)
+    actual_outcome: Mapped[str] = mapped_column(String(8), default='')
+    pnl: Mapped[float] = mapped_column(Float, default=0.0)
+    accuracy: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class TradingStageRecord(Base):
+    __tablename__ = 'trading_stage_records'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stage: Mapped[int] = mapped_column(Integer, default=0)
+    reason: Mapped[str] = mapped_column(String(256), default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MarketWhitelistRecord(Base):
+    __tablename__ = 'market_whitelist'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    added_reason: Mapped[str] = mapped_column(String(256), default='')
