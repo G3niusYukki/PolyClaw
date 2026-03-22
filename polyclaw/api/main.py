@@ -4,13 +4,32 @@ from sqlalchemy.orm import Session
 
 from polyclaw.config import settings
 from polyclaw.db import Base, engine, get_session
-from polyclaw.models import Decision, Market, Position, AuditLog, ProposalRecord
-from polyclaw.schemas import ApprovalResponse, DecisionOut, ProposalPreviewOut, ProposalRecordOut, RankedMarketOut, RunnerTickResponse, ScanResponse
+from polyclaw.models import Decision, Market, Position, AuditLog, ProposalRecord, ShadowResult
+from polyclaw.schemas import (
+    ApprovalResponse,
+    DecisionOut,
+    DiscrepancyItemOut,
+    ProposalPreviewOut,
+    ProposalRecordOut,
+    RankedMarketOut,
+    ReconciliationReportOut,
+    ReconciliationRunResponse,
+    RunnerTickResponse,
+    ScanResponse,
+)
 from polyclaw.services.analysis import AnalysisService
 from polyclaw.safety import kill_switch_state, set_kill_switch
 from polyclaw.services.execution import ExecutionService
 from polyclaw.services.runner import RunnerService
+from polyclaw.shadow.accuracy import SignalAccuracyMonitor
+from polyclaw.shadow.mode import ShadowModeEngine
+from polyclaw.shadow.transition import LiveTransitionManager
 from polyclaw.workflow import ProposalWorkflowService
+
+# Reconciliation imports
+from polyclaw.providers.ctf import PolymarketCTFProvider
+from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
+from polyclaw.reconciliation.service import ReconciliationService
 
 app = FastAPI(title='PolyClaw')
 Base.metadata.create_all(bind=engine)
@@ -18,6 +37,16 @@ analysis_service = AnalysisService()
 execution_service = ExecutionService()
 runner_service = RunnerService()
 workflow_service = ProposalWorkflowService()
+shadow_mode_engine = ShadowModeEngine()
+shadow_accuracy_monitor = SignalAccuracyMonitor()
+live_transition_manager = LiveTransitionManager()
+
+# Reconciliation providers (module-level singletons)
+_ctf_provider = PolymarketCTFProvider()
+_polymarket_api = PolymarketGammaProvider()
+
+# In-memory store for the last reconciliation report (module-level)
+_last_reconciliation_report = None
 
 
 @app.get('/health')
@@ -224,3 +253,225 @@ def enable_kill_switch(reason: str = 'manual stop', session: Session = Depends(g
 @app.post('/kill-switch/disable')
 def disable_kill_switch(reason: str = 'manual resume', session: Session = Depends(get_session)):
     return set_kill_switch(session, False, reason)
+
+
+# ---------------------------------------------------------------------------
+# Shadow Mode Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get('/shadow/results')
+def shadow_results(window_days: int = 30, session: Session = Depends(get_session)):
+    """List shadow trading results with accuracy data."""
+    from polyclaw.timeutils import utcnow
+    from datetime import timedelta
+
+    cutoff = utcnow() - timedelta(days=window_days)
+    rows = session.scalars(
+        select(ShadowResult)
+        .where(ShadowResult.created_at >= cutoff)
+        .order_by(ShadowResult.created_at.desc())
+    ).all()
+    return [
+        {
+            'id': r.id,
+            'market_id': r.market_id,
+            'strategy_id': r.strategy_id,
+            'predicted_side': r.predicted_side,
+            'predicted_prob': r.predicted_prob,
+            'shadow_fill_price': r.shadow_fill_price,
+            'actual_outcome': r.actual_outcome,
+            'pnl': r.pnl,
+            'accuracy': r.accuracy,
+            'resolved_at': r.resolved_at,
+            'created_at': r.created_at,
+        }
+        for r in rows
+    ]
+
+
+@app.get('/shadow/accuracy')
+def shadow_accuracy(window_days: int = 30, session: Session = Depends(get_session)):
+    """Get signal accuracy report over a rolling window."""
+    return shadow_accuracy_monitor.get_accuracy(window_days=window_days, session=session)
+
+
+@app.post('/shadow/reset')
+def shadow_reset(session: Session = Depends(get_session)):
+    """Reset all shadow positions (mark them as closed)."""
+    from polyclaw.safety import log_event
+
+    # Close all open shadow positions
+    shadow_positions = session.scalars(
+        select(Position).where(Position.is_shadow.is_(True)).where(Position.is_open.is_(True))
+    ).all()
+    for pos in shadow_positions:
+        pos.is_open = False
+
+    log_event(session, 'shadow_reset', f'reset {len(shadow_positions)} shadow positions', 'ok')
+    session.commit()
+    return {'reset': len(shadow_positions), 'status': 'ok'}
+
+
+@app.get('/shadow/positions')
+def shadow_positions(session: Session = Depends(get_session)):
+    """Get current shadow positions (open, in-memory)."""
+    return session.scalars(
+        select(Position)
+        .where(Position.is_shadow.is_(True))
+        .order_by(Position.opened_at.desc())
+    ).all()
+
+
+@app.get('/shadow/status')
+def shadow_status(session: Session = Depends(get_session)):
+    """Get shadow mode and transition status."""
+    return live_transition_manager.get_status(session=session)
+
+
+@app.get('/shadow/mode')
+def shadow_mode():
+    """Get current shadow mode enabled status."""
+    return {'shadow_mode_enabled': settings.shadow_mode_enabled}
+
+
+@app.post('/shadow/mode/{enabled}')
+def set_shadow_mode(enabled: bool, session: Session = Depends(get_session)):
+    """Enable or disable shadow mode."""
+    from polyclaw.safety import log_event
+
+    old_value = settings.shadow_mode_enabled
+    settings.shadow_mode_enabled = enabled
+    log_event(
+        session,
+        'shadow_mode_toggle',
+        f'from={old_value}|to={enabled}',
+        'ok',
+    )
+    session.commit()
+    return {'shadow_mode_enabled': settings.shadow_mode_enabled}
+
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post('/reconciliation/run', response_model=ReconciliationRunResponse)
+def run_reconciliation(session: Session = Depends(get_session)):
+    """
+    Trigger a full reconciliation run across system DB, Polymarket API, and CTF contract.
+
+    Returns a summary of the reconciliation result including drift detection and
+    auto-close actions.
+    """
+    service = ReconciliationService(
+        session=session,
+        ctf_provider=_ctf_provider,
+        polymarket_api=_polymarket_api,
+    )
+    report = service.reconcile()
+
+    # Store the report for retrieval via GET /reconciliation/report
+    global _last_reconciliation_report
+    _last_reconciliation_report = report
+
+    return ReconciliationRunResponse(
+        status='ok',
+        drift_detected=report.drift_detected,
+        total_drift_usd=report.total_drift_usd,
+        discrepancy_count=len(report.discrepancy_items),
+        auto_close_triggered=report.auto_close_triggered,
+        auto_close_count=report.auto_close_count,
+    )
+
+
+@app.get('/reconciliation/report', response_model=ReconciliationReportOut)
+def get_reconciliation_report(session: Session = Depends(get_session)):
+    """
+    Get the last reconciliation report.
+
+    Returns 404 if no reconciliation has been run yet.
+    """
+    if _last_reconciliation_report is None:
+        raise HTTPException(status_code=404, detail='no_reconciliation_report')
+    report = _last_reconciliation_report
+    return ReconciliationReportOut(
+        drift_detected=report.drift_detected,
+        total_drift_usd=report.total_drift_usd,
+        discrepancy_items=[
+            DiscrepancyItemOut(
+                market_id=item.market_id,
+                source1=item.source1,
+                source2=item.source2,
+                expected_value=item.expected_value,
+                actual_value=item.actual_value,
+                drift_usd=item.drift_usd,
+            )
+            for item in report.discrepancy_items
+        ],
+        timestamp=report.timestamp,
+        auto_close_triggered=report.auto_close_triggered,
+        auto_close_count=report.auto_close_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Order Management Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get('/orders/{order_id}')
+def get_order(order_id: int, session: Session = Depends(get_session)):
+    """Get a specific order by ID."""
+    from polyclaw.models import Order
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail='order_not_found')
+    return {
+        'id': order.id,
+        'client_order_id': order.client_order_id,
+        'venue_order_id': order.venue_order_id,
+        'side': order.side,
+        'price': order.price,
+        'size': order.size,
+        'notional_usd': order.notional_usd,
+        'status': order.status,
+        'mode': order.mode,
+        'retry_count': getattr(order, 'retry_count', 0),
+        'status_history': getattr(order, 'status_history', []),
+        'submitted_at': order.submitted_at,
+        'updated_at': getattr(order, 'updated_at', None),
+    }
+
+
+@app.get('/orders')
+def list_orders(
+    status: str | None = None,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+):
+    """List recent orders with optional status filter."""
+    from polyclaw.models import Order
+    stmt = select(Order).order_by(Order.submitted_at.desc()).limit(limit)
+    if status:
+        stmt = stmt.where(Order.status == status)
+    rows = session.scalars(stmt).all()
+    return [
+        {
+            'id': order.id,
+            'client_order_id': order.client_order_id,
+            'venue_order_id': order.venue_order_id,
+            'side': order.side,
+            'price': order.price,
+            'size': order.size,
+            'notional_usd': order.notional_usd,
+            'status': order.status,
+            'mode': order.mode,
+            'retry_count': getattr(order, 'retry_count', 0),
+            'submitted_at': order.submitted_at,
+            'updated_at': getattr(order, 'updated_at', None),
+        }
+        for order in rows
+    ]

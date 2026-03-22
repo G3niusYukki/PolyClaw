@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     require_approval: bool = True
     auto_execute: bool = False
     live_trading_enabled: bool = False
+    shadow_mode_enabled: bool = True
+    shadow_stage: int = 0  # 0=shadow, 1=10%, 2=25%, 3=50%, 4=100%
 
     max_position_usd: float = 50.0
     max_total_exposure_usd: float = 250.0
@@ -25,6 +27,13 @@ class Settings(BaseSettings):
     scan_limit: int = 20
     max_daily_loss_usd: float = 200.0
     max_consecutive_failures: int = 3
+
+    # CTF / Polymarket live trading settings
+    polygon_rpc_url: str = 'https://polygon-rpc.com'
+    ctf_contract_address: str = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E'
+    price_band_pct: float = 2.0
+    default_poll_interval: int = 5
+    default_poll_timeout: int = 60
 
 
 settings = Settings()

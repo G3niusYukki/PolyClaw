@@ -58,3 +58,16 @@ variable "availability_zones" {
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]
 }
+
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs for ALB"
+  type        = list(string)
+  default     = []
+}
+
+variable "database_url" {
+  description = "Database connection URL"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
