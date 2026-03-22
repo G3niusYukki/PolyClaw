@@ -60,12 +60,15 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 | `polyclaw/execution/` | Execution package: OrderStateMachine, OrderType/OrderSpec, PriceBandValidator, RetryExecutor, OrderTracker, StagedPositionSizer, MarketWhitelist |
 | `polyclaw/shadow/` | Shadow mode: ShadowModeEngine, SignalAccuracyMonitor, ThresholdTuner, LiveTransitionManager |
 | `polyclaw/reconciliation/` | Reconciliation: ReconciliationService, DiscrepancyDetector, DriftAlerts |
+| `polyclaw/monitoring/` | Observability: MetricsCollector, AlertRouter, TelegramChannel, PagerDutyChannel, PnLReporter, DailyReportGenerator, AnomalyDetector, HealthChecker |
+| `polyclaw/scaling/` | Scaling: ScalingManager, PerformanceEvaluator, MarketExpander, SlippageMonitor, FeeCalculator |
+| `polyclaw/dr/` | Disaster recovery: DisasterRecoveryManager (snapshot restore, replica switch, data integrity) |
 | `polyclaw/workflow.py` | ProposalWorkflowService — persists proposals, manages statuses |
 | `polyclaw/repositories.py` | Data access layer (upsert_market, create_decision, record_order_and_position) |
 | `polyclaw/secrets.py` | AWS Secrets Manager client with env var fallback |
 | `polyclaw/api/main.py` | FastAPI application with all REST endpoints |
 | `alembic/` | Database migrations (Postgres/SQLite) |
-| `infrastructure/` | Terraform for AWS (RDS, S3, Lambda, EventBridge, ECS Fargate, ALB, Secrets Manager) |
+| `infrastructure/` | Terraform for AWS (RDS, S3, Lambda, EventBridge, ECS, ALB, Secrets, Grafana, CloudWatch Alarms, DR) |
 
 ### Key Patterns
 
@@ -78,6 +81,8 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 - **Risk Hierarchy** — `risk/__init__.py` (market-level RiskEngine) → `risk/portfolio.py` (portfolio-level) → `safety.py` (circuit breakers)
 - **Execution Pipeline** — `execution/orders.py` (types) → `execution/price_bands.py` (validation) → `execution/retry.py` (retry) → `providers/ctf.py` (submission) → `execution/tracker.py` (tracking)
 - **Shadow Mode** — `shadow/mode.py` (simulate execution) → `shadow/accuracy.py` (track accuracy) → `shadow/tuning.py` (tune thresholds) → `shadow/transition.py` (go live)
+- **Monitoring Pipeline** — `metrics.py` (CloudWatch emission) → `alerts.py` (severity routing) → `channels.py` (Telegram/PagerDuty)
+- **Scaling Pipeline** — `evaluator.py` (performance criteria) → `manager.py` (stage control) → `expansion.py` (market whitelist expansion)
 
 ## API Endpoints
 
@@ -103,6 +108,8 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 | `POST /reconciliation/run`, `GET /reconciliation/report` | Reconciliation |
 | `GET /shadow/results`, `GET /shadow/accuracy`, `GET /shadow/positions` | Shadow mode |
 | `POST /shadow/reset`, `GET/POST /shadow/mode` | Shadow mode control |
+| `GET /reports/pnl`, `GET /reports/attribution`, `GET /reports/daily` | PnL and attribution reports |
+| `GET /health/detailed` | Detailed health check (DB, Polymarket API, CTF, data freshness, kill switch) |
 
 ## Safety Controls
 
@@ -145,4 +152,13 @@ Terraform configs in `infrastructure/` for AWS deployment:
 - `ecs.tf` — ECS Fargate cluster (4 services: ingestion, strategy, execution, monitor)
 - `alb.tf` — Application Load Balancer with path-based routing
 - `ecs-task-iam.tf` — IAM roles for ECS task execution
+- `alarms.tf` — CloudWatch alarms (6 metrics) with SNS routing
+- `grafana.tf` — Grafana dashboard provisioning
+- `dr.tf` — Disaster recovery (cross-region S3 replication, RDS read replica)
 - `outputs.tf` — bucket names, RDS endpoint, VPC IDs
+
+CI/CD in `.github/workflows/`:
+- `ci.yml` — lint (ruff), type-check (mypy), test (pytest with coverage ≥80%), alembic migration, terraform validate
+- `deploy.yml` — Docker build to ECR, ECS task definition update, staging on main, production on release tag
+
+Docker: `Dockerfile` (multi-stage, non-root) and `docker-compose.yml` (polyclaw + postgres)

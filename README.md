@@ -19,17 +19,20 @@ PolyClaw is a guarded Polymarket auto-analysis and execution framework. It is de
 - Portfolio-level risk management: Kelly position sizing, event cluster tracking, circuit breakers
 - Postgres persistence with Alembic migrations (SQLite for dev)
 - Historical data ingestion pipeline with Lambda + EventBridge
-- Terraform infrastructure (RDS, S3, Lambda, EventBridge, ECS Fargate, ALB, Secrets Manager)
-- Polymarket CTF execution via Polygon with order state machine
-- Shadow mode (simulated trading) with signal accuracy monitoring
-- Staged live deployment (shadow → 10% → 25% → 50% → 100%)
-- Reconciliation service comparing system, Polymarket API, and blockchain state
-- AWS ECS Fargate deployment with Application Load Balancer
-- AWS Secrets Manager integration for private keys and API tokens
-- Pluggable providers for markets, evidence, and execution
-- FastAPI service for health, scans, decisions, approvals, and positions
-- Kill switch and audit log primitives
-- 300+ tests covering all core functionality
+- Terraform infrastructure (RDS, S3, Lambda, EventBridge, ECS Fargate, ALB, Secrets Manager, Grafana, CloudWatch Alarms, DR replication)
+- Grafana dashboards (8 panels: system health, PnL, Sharpe, fill rate, latency, reconciliation)
+- CloudWatch alarms (6 metrics with SNS routing)
+- AlertRouter (Telegram/PagerDuty with severity-based routing)
+- Scaling automation (auto stage advancement based on performance criteria)
+- Market expansion with auto-candidate detection
+- Slippage monitoring with excessive slippage alerts
+- Fee optimization (platform fees + Polygon gas estimation)
+- Anomaly detection (3-sigma PnL/volume/spread spikes)
+- Operational runbook and DR test procedures
+- GitHub Actions CI/CD (lint, type-check, test, migration, Terraform validate)
+- Dockerfile (multi-stage, non-root) + Docker Compose
+- Disaster recovery (cross-region S3 replication, RDS read replica failover)
+- 400+ tests covering all core functionality
 
 ## Architecture
 
@@ -94,7 +97,7 @@ polyclaw backtest    # Run backtest with walk-forward validation
 See `docs/superpowers/specs/2026-03-22-production-roadmap-design.md` for the 3-month roadmap:
 - Phase 1: Foundation ✅ (data infrastructure, multi-strategy, backtesting, portfolio risk)
 - Phase 2: Execution ✅ (CTF integration, order management, reconciliation, shadow mode, ECS deployment)
-- Phase 3: Production (Grafana dashboards, CloudWatch alarms, Telegram/PagerDuty, CI/CD, DR testing)
+- Phase 3: Production ✅ (observability, scaling, CI/CD, disaster recovery)
 
 ## Disclaimer
 
