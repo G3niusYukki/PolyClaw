@@ -178,24 +178,24 @@ class ReconciliationService:
 
     def get_api_positions(self) -> dict[str, PositionSummary]:
         """
-        Fetch positions from the Polymarket REST API.
-
-        Currently mocked — calls the CTF provider's get_positions() for now.
+        Fetch positions from the Polymarket REST API (via PolymarketGammaProvider).
 
         Returns:
             A dict mapping market_id -> PositionSummary.
         """
         import asyncio
         try:
-            positions = self.ctf_provider.get_positions()
-            if asyncio.iscoroutine(positions):
-                positions = asyncio.run(positions)
+            if hasattr(self.polymarket_api, 'get_positions'):
+                positions = self.polymarket_api.get_positions()
+                if asyncio.iscoroutine(positions):
+                    positions = asyncio.run(positions)
+            else:
+                positions = []
         except RuntimeError:
-            positions = self.ctf_provider.get_positions()
+            positions = self.polymarket_api.get_positions()
             if asyncio.iscoroutine(positions):
                 positions = asyncio.run(positions)
 
-        # positions is a list[dict] from the CTF provider
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
             market_id = pos_dict.get('market_id', '')
@@ -203,8 +203,8 @@ class ReconciliationService:
                 result[market_id] = PositionSummary(
                     market_id=market_id,
                     side=pos_dict.get('side', 'yes'),
-                    quantity=pos_dict.get('quantity', 0.0),
-                    notional_usd=pos_dict.get('notional_usd', 0.0),
+                    quantity=pos_dict.get('size', 0.0),
+                    notional_usd=pos_dict.get('value', 0.0),
                     avg_price=pos_dict.get('avg_price', 0.0),
                     source='POLYMARKET_API',
                 )
@@ -212,9 +212,7 @@ class ReconciliationService:
 
     def get_chain_positions(self) -> dict[str, PositionSummary]:
         """
-        Fetch positions from the CTF blockchain contract.
-
-        Currently mocked — calls the CTF provider's get_positions() for now.
+        Fetch positions from the CTF blockchain contract (via PolymarketCTFProvider).
 
         Returns:
             A dict mapping market_id -> PositionSummary.
@@ -229,7 +227,6 @@ class ReconciliationService:
             if asyncio.iscoroutine(positions):
                 positions = asyncio.run(positions)
 
-        # positions is a list[dict] from the CTF provider
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
             market_id = pos_dict.get('market_id', '')
@@ -237,8 +234,8 @@ class ReconciliationService:
                 result[market_id] = PositionSummary(
                     market_id=market_id,
                     side=pos_dict.get('side', 'yes'),
-                    quantity=pos_dict.get('quantity', 0.0),
-                    notional_usd=pos_dict.get('notional_usd', 0.0),
+                    quantity=pos_dict.get('size', 0.0),
+                    notional_usd=pos_dict.get('value', 0.0),
                     avg_price=pos_dict.get('avg_price', 0.0),
                     source='CTF_CONTRACT',
                 )

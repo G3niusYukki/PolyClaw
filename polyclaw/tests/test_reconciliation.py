@@ -291,6 +291,44 @@ class TestReconciliationService:
         assert result['test-mkt'].notional_usd == 20.0
         assert result['test-mkt'].side == 'yes'
 
+    def test_get_api_positions_uses_polymarket_api(self):
+        """get_api_positions reads from Polymarket API (polymarket_api provider)."""
+        from unittest.mock import MagicMock
+        svc = ReconciliationService(
+            session=MagicMock(),
+            ctf_provider=MagicMock(),
+            polymarket_api=MagicMock(),
+        )
+        svc.polymarket_api.get_positions = MagicMock(return_value=[
+            {'market_id': 'm1', 'side': 'yes', 'size': 10.0, 'value': 5.5}
+        ])
+        positions = svc.get_api_positions()
+        assert len(positions) == 1
+        assert positions['m1'].source == 'POLYMARKET_API'
+        assert positions['m1'].side == 'yes'
+        assert positions['m1'].quantity == 10.0
+        assert positions['m1'].notional_usd == 5.5
+        svc.polymarket_api.get_positions.assert_called_once()
+
+    def test_get_chain_positions_uses_ctf_contract(self):
+        """get_chain_positions reads from CTF contract (ctf_provider)."""
+        from unittest.mock import MagicMock
+        svc = ReconciliationService(
+            session=MagicMock(),
+            ctf_provider=MagicMock(),
+            polymarket_api=MagicMock(),
+        )
+        svc.ctf_provider.get_positions = MagicMock(return_value=[
+            {'market_id': 'm1', 'side': 'yes', 'size': 10.0, 'value': 5.5}
+        ])
+        positions = svc.get_chain_positions()
+        assert len(positions) == 1
+        assert positions['m1'].source == 'CTF_CONTRACT'
+        assert positions['m1'].side == 'yes'
+        assert positions['m1'].quantity == 10.0
+        assert positions['m1'].notional_usd == 5.5
+        svc.ctf_provider.get_positions.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # DriftAlerts tests

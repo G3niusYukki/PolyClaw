@@ -9,8 +9,9 @@ from polyclaw.timeutils import utcnow
 
 
 class PolymarketGammaProvider:
-    def __init__(self, base_url: str | None = None):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = base_url or settings.polymarket_gamma_url
+        self._api_key = api_key or getattr(settings, 'polymarket_api_key', '')
 
     def list_markets(self, limit: int) -> list[MarketSnapshot]:
         params = urlencode({'limit': limit, 'active': 'true', 'closed': 'false'})
@@ -26,6 +27,53 @@ class PolymarketGammaProvider:
         except json.JSONDecodeError:
             return False
         return len(outcomes) == 2 and {o.lower() for o in outcomes} == {'yes', 'no'}
+
+    def get_positions(self) -> list[dict]:
+        """
+        Fetch the authenticated user's positions from the Polymarket Gamma REST API.
+
+        Returns:
+            List of position dicts, each containing at minimum:
+            market_id, side, size, value, avg_price.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        positions_url = getattr(settings, 'polymarket_positions_url', None)
+        if not positions_url:
+            logger.debug("polymarket_positions_url not configured; returning empty positions")
+            return []
+
+        try:
+            req = Request(
+                positions_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+            )
+            if self._api_key:
+                req.add_header('Authorization', f'Bearer {self._api_key}')
+
+            with urlopen(req, timeout=settings.request_timeout_seconds) as resp:
+                payload = json.loads(resp.read().decode('utf-8'))
+
+            raw_positions = payload if isinstance(payload, list) else payload.get('positions', [])
+            return [
+                {
+                    'market_id': p.get('market_id', ''),
+                    'side': p.get('side', 'yes'),
+                    'size': float(p.get('size', 0.0)),
+                    'value': float(p.get('value', 0.0)),
+                    'avg_price': float(p.get('avgPrice', 0.0)),
+                }
+                for p in raw_positions
+                if p.get('market_id')
+            ]
+        except Exception as exc:
+            logger.warning("Failed to fetch positions from Polymarket Gamma API: %s", exc)
+            return []
 
     def _to_snapshot(self, item: dict) -> MarketSnapshot:
         outcome_prices = json.loads(item.get('outcomePrices') or '[]')
