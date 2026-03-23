@@ -306,8 +306,8 @@ class ReconciliationService:
         if self._mode != 'live':
             return True, 'not in live mode'
 
-        api_positions, api_ok = self.get_api_positions()
-        chain_positions, chain_ok = self.get_chain_positions()
+        _api_positions, _api_ok = self.get_api_positions()
+        _chain_positions, _chain_ok = self.get_chain_positions()
 
         if not api_ok:
             return False, "POLYMARKET_API positions unavailable — downgrading to read-only"

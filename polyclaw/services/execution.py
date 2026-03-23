@@ -183,6 +183,11 @@ class ExecutionService:
 
     def _check_live_trading_allowed(self, session: Session) -> None:
         """Block live execution if reconciliation sources are unavailable."""
+        # Only gate when actually in live mode
+        from polyclaw.config import settings as cfg_settings
+        if getattr(cfg_settings, 'execution_mode', 'paper') != 'live':
+            return  # no gating in paper mode
+
         import logging
 
         logger = logging.getLogger(__name__)
