@@ -25,6 +25,7 @@ from polyclaw.execution.state import OrderStateMachine
 from polyclaw.execution.tracker import OrderTracker, OrderUpdate
 from polyclaw.models import Order
 from polyclaw.providers.signer import get_signer
+from polyclaw.safety import _circuit_state
 from polyclaw.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -331,6 +332,16 @@ class PolymarketCTFProvider:
                 raise RetryableError("Rate limited")
             raise
 
+    def _rpc_call_with_error_tracking(self, method: str, params: list[Any] | None = None) -> dict:
+        """Make an RPC call and record errors against the CTF circuit breaker."""
+        try:
+            return self._rpc_call(method, params)
+        except Exception:
+            from polyclaw.safety import get_ctf_circuit_breaker
+
+            get_ctf_circuit_breaker().record_rpc_error()
+            raise
+
     def _get_gas_params(self) -> dict:
         """Fetch current gas parameters for EIP-1559 transaction."""
         try:
@@ -388,7 +399,7 @@ class PolymarketCTFProvider:
             'type': '0x2',
         }
         raw_tx_hex = self._signer.sign_transaction(tx_dict)
-        result = self._rpc_call('eth_sendRawTransaction', [raw_tx_hex])
+        result = self._rpc_call_with_error_tracking('eth_sendRawTransaction', [raw_tx_hex])
         tx_hash = cast(str, result) if result else ''
         if not tx_hash:
             raise RuntimeError("eth_sendRawTransaction returned empty tx_hash")
@@ -401,8 +412,30 @@ class PolymarketCTFProvider:
 
         Builds the transaction, signs it, and submits via Polygon RPC.
         """
-        # Broadcast real signed transaction
-        tx_hash = self._broadcast_signed_tx(order_spec, client_order_id)
+        from polyclaw.safety import get_ctf_circuit_breaker
+
+        breaker = get_ctf_circuit_breaker()
+        session = None
+        try:
+            session = SessionLocal()
+            if not breaker.check_and_allow(session):
+                raise RuntimeError("CTF circuit breaker triggered, refusing to submit")
+        except Exception:
+            if not breaker.check_and_allow(None):
+                raise RuntimeError("CTF circuit breaker triggered, refusing to submit")
+        finally:
+            if session:
+                session.close()
+
+        try:
+            # Broadcast real signed transaction
+            tx_hash = self._broadcast_signed_tx(order_spec, client_order_id)
+            breaker.record_send_success()
+        except Exception as exc:
+            breaker.record_send_failure()
+            if 'sign' in str(exc).lower() or 'private key' in str(exc).lower():
+                _circuit_state.trigger_global(f"CTF_SIGNING_ERROR: {exc}")
+            raise
 
         # For order types that need immediate handling
         if order_spec.type == OrderType.IOC:
@@ -567,13 +600,13 @@ class PolymarketCTFProvider:
         try:
             # USDC balance via ERC-20 balanceOf(address)
             usdc_data = '0x70a08231' + signer_address[2:].rjust(64, '0')  # balanceOf(address)
-            usdc_resp = self._rpc_call('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
+            usdc_resp = self._rpc_call_with_error_tracking('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
             usdc_result = usdc_resp.get('result', '0x0') if isinstance(usdc_resp, dict) else '0x0'
             usdc_raw = int(cast(str, usdc_result), 16)
             usdc_balance = usdc_raw / USDC_DECIMALS
 
             # MATIC native balance via eth_getBalance
-            matic_resp = self._rpc_call('eth_getBalance', [signer_address, 'latest'])
+            matic_resp = self._rpc_call_with_error_tracking('eth_getBalance', [signer_address, 'latest'])
             matic_result = matic_resp.get('result', '0x0') if isinstance(matic_resp, dict) else '0x0'
             matic_raw = int(cast(str, matic_result), 16)
             matic_balance = matic_raw / 1e18
@@ -629,7 +662,7 @@ class PolymarketCTFProvider:
             }
 
             raw_hex = self._signer.sign_transaction(tx_dict)
-            result = self._rpc_call('eth_sendRawTransaction', [raw_hex])
+            result = self._rpc_call_with_error_tracking('eth_sendRawTransaction', [raw_hex])
             cancel_tx_hash = result if result else ''
             logger.info("Cancel tx broadcast: %s for order %s", cancel_tx_hash[:16], order_hash[:16])
             return bool(cancel_tx_hash)

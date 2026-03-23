@@ -22,9 +22,20 @@ def reset_registry():
 def reset_signer():
     """Reset the signer singleton before and after each test."""
     from polyclaw.providers import signer
+
     signer._signer_instance = None
     yield
     signer._signer_instance = None
+
+
+@pytest.fixture(autouse=True)
+def clean_circuit_state():
+    """Reset CTF circuit breaker singleton and global circuit state before each test."""
+    from polyclaw.safety import reset_ctf_circuit_breaker
+
+    reset_ctf_circuit_breaker()
+    yield
+    reset_ctf_circuit_breaker()
 
 
 @pytest.fixture(autouse=True)

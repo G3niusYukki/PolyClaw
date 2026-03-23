@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import logging
+import time as _time_module
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -5,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from polyclaw.models import AuditLog, Decision, Order
 from polyclaw.timeutils import utcnow
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Circuit Breaker state helpers (stored in memory for runtime state)
@@ -316,6 +322,83 @@ class StrategyCircuitBreaker:
         if self.is_triggered():
             return False
         return True
+
+
+# ---------------------------------------------------------------------------
+# CTF Live Circuit Breaker
+# ---------------------------------------------------------------------------
+
+
+class CTFLiveCircuitBreaker:
+    """Circuit breaker for CTF live trading failures.
+
+    Triggers kill switch on:
+    - 3 consecutive eth_sendTransaction failures
+    - Signing exception
+    - 5 RPC errors in 10 minutes (sliding window)
+    """
+
+    def __init__(
+        self,
+        max_consecutive_send_failures: int = 3,
+        max_rpc_errors: int = 5,
+        error_window_seconds: int = 600,
+    ):
+        self.max_consecutive_send_failures = max_consecutive_send_failures
+        self.max_rpc_errors = max_rpc_errors
+        self.error_window_seconds = error_window_seconds
+        self._send_failures: int = 0
+        self._rpc_errors: list[float] = []
+
+    def record_send_failure(self) -> None:
+        self._send_failures += 1
+        if self._send_failures >= self.max_consecutive_send_failures:
+            self._trigger_kill_switch(
+                f"ctf_send_failure: {self._send_failures} consecutive failures"
+            )
+
+    def record_send_success(self) -> None:
+        self._send_failures = 0
+
+    def record_rpc_error(self) -> None:
+        now = _time_module.monotonic()
+        self._rpc_errors.append(now)
+        cutoff = now - self.error_window_seconds
+        self._rpc_errors = [t for t in self._rpc_errors if t > cutoff]
+        if len(self._rpc_errors) >= self.max_rpc_errors:
+            self._trigger_kill_switch(
+                f"ctf_rpc_errors: {len(self._rpc_errors)} in {self.error_window_seconds}s"
+            )
+
+    def check_and_allow(self, session: Session | None) -> bool:
+        if _circuit_state.is_global_triggered():
+            return False
+        return True
+
+    def _trigger_kill_switch(self, reason: str) -> None:
+        _circuit_state.trigger_global(f"CTF_LIVE:{reason}")
+        logger.critical("CTF live circuit breaker triggered: %s", reason)
+
+
+# Singleton
+_ctf_circuit_breaker: CTFLiveCircuitBreaker | None = None
+
+
+def get_ctf_circuit_breaker() -> CTFLiveCircuitBreaker:
+    global _ctf_circuit_breaker
+    if _ctf_circuit_breaker is None:
+        _ctf_circuit_breaker = CTFLiveCircuitBreaker()
+    return _ctf_circuit_breaker
+
+
+def reset_ctf_circuit_breaker() -> None:
+    """Reset the CTF circuit breaker singleton and global circuit state.
+
+    Exists primarily for use in test fixtures to ensure a clean state between tests.
+    """
+    global _ctf_circuit_breaker
+    _ctf_circuit_breaker = None
+    _circuit_state.reset_global()
 
 
 # ---------------------------------------------------------------------------
