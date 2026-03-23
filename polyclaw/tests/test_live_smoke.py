@@ -4,9 +4,9 @@ Requires: CTF_PRIVATE_KEY env var set, LIVE_TRADING_ENABLED=true.
 Run manually: python -m pytest polyclaw/tests/test_live_smoke.py -v -s
 """
 import os
-import pytest
 import time
 
+import pytest
 
 pytestmark = pytest.mark.live_manual
 
@@ -74,7 +74,7 @@ def test_live_nonce():
 
 def test_live_selector_confirmed():
     """Verify selectors are confirmed (not placeholders) before allowing live trading."""
-    from polyclaw.providers.ctf import _CREATE_ORDER_SELECTOR, _CANCEL_SELECTOR
+    from polyclaw.providers.ctf import _CANCEL_SELECTOR, _CREATE_ORDER_SELECTOR
 
     # These must be real selectors, not placeholders
     assert _CREATE_ORDER_SELECTOR is not None, "createOrder selector not set"
@@ -192,9 +192,10 @@ def test_live_full_pipeline_sign_broadcast_receipt_fill(live_provider, test_mark
     # 8. RECONCILIATION — run a reconciliation cycle
     # NOTE: ReconciliationService(session, ctf_provider, polymarket_api) — all three required.
     # Uses live_provider's ctf_provider; polymarket_api is optional (falls back gracefully).
-    from polyclaw.reconciliation.service import ReconciliationService
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+
+    from polyclaw.reconciliation.service import ReconciliationService
     # Use in-memory SQLite for the smoke test (avoids DB dependency)
     engine = create_engine('sqlite:///:memory:')
     Session = sessionmaker(bind=engine)
@@ -215,9 +216,10 @@ def test_live_full_pipeline_sign_broadcast_receipt_fill(live_provider, test_mark
 @pytest.mark.live_manual
 def test_live_receipt_parsing():
     """Parse a real eth_getTransactionReceipt and verify FillResult event decoding."""
+    import os
+
     from polyclaw.providers.ctf import PolymarketCTFProvider
     from polyclaw.providers.signer import WalletSigner
-    import os
 
     pk = os.environ.get('CTF_PRIVATE_KEY', '')
     if not pk:
@@ -244,10 +246,12 @@ def test_live_receipt_parsing():
 @pytest.mark.live_manual
 def test_live_cancel_order():
     """Submit and cancel a real order to test the cancel pipeline."""
-    from polyclaw.providers.ctf import PolymarketCTFProvider
+    import os
+    import time
+
     from polyclaw.execution.orders import OrderSpec, OrderType
+    from polyclaw.providers.ctf import PolymarketCTFProvider
     from polyclaw.providers.signer import WalletSigner
-    import os, time
 
     pk = os.environ.get('CTF_PRIVATE_KEY', '')
     if not pk:

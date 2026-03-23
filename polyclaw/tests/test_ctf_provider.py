@@ -445,8 +445,9 @@ class TestCTFPositions:
 
     def test_fetch_active_markets_uses_url(self):
         """_fetch_active_markets calls Polymarket API when URL is configured."""
-        from polyclaw.providers.ctf import PolymarketCTFProvider
         from unittest.mock import MagicMock
+
+        from polyclaw.providers.ctf import PolymarketCTFProvider
 
         provider = PolymarketCTFProvider()
 
