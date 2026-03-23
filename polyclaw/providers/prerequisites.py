@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+import httpx
 
 
 @dataclass
@@ -43,14 +44,15 @@ class LiveTradingPrerequisites:
             detail=addr if passed else 'not configured or zero'
         ))
 
-        # 3. RPC URL reachable
+        # 3. RPC URL reachable — do a real JSON-RPC eth_blockNumber call
         try:
             rpc_url = getattr(self.settings, 'polygon_rpc_url', '') or 'https://polygon-rpc.com'
-            import httpx
-            resp = httpx.get(rpc_url.rstrip('/') + '/health', timeout=5)
+            payload = {"jsonrpc": "2.0", "method": "eth_blockNumber", "params": [], "id": 1}
+            resp = httpx.post(rpc_url, json=payload, timeout=5, headers={"Content-Type": "application/json"})
+            rpc_ok = resp.status_code == 200 and "result" in resp.json()
             checks.append(PrereqCheck(
                 name='rpc_reachable',
-                passed=resp.status_code < 500,
+                passed=rpc_ok,
                 detail=f'HTTP {resp.status_code}'
             ))
         except Exception as exc:

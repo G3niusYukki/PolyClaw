@@ -482,7 +482,7 @@ class TestLiveTradingPrerequisites:
 
     def test_live_prerequisites_fail_if_rpc_unreachable(self):
         """Prerequisites check fails if RPC is unreachable."""
-        from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites, PrerequisiteError
 
         mock_provider = MagicMock()
         mock_signer = MagicMock()
@@ -490,9 +490,9 @@ class TestLiveTradingPrerequisites:
         mock_settings = MagicMock()
         mock_settings.polygon_rpc_url = 'https://broken-rpc.example.com'
         mock_settings.ctf_contract_address = '0x' + 'b' * 40
-        with patch('httpx.get', side_effect=Exception("Connection refused")):
+        with patch('httpx.post', side_effect=Exception("Connection refused")):
             checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
-            with pytest.raises(ValueError, match="prerequisites failed"):
+            with pytest.raises(PrerequisiteError, match="prerequisites failed"):
                 checker.raise_if_any_failed()
 
     def test_check_all_returns_list_of_prereq_checks(self):
@@ -509,7 +509,8 @@ class TestLiveTradingPrerequisites:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        with patch('httpx.get', return_value=mock_response):
+        mock_response.json.return_value = {"result": "0x0"}
+        with patch('httpx.post', return_value=mock_response):
             checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
             checks = checker.check_all()
 
@@ -521,7 +522,7 @@ class TestLiveTradingPrerequisites:
 
     def test_raise_if_any_failed_raises_when_check_fails(self):
         """raise_if_any_failed raises ValueError when a check fails."""
-        from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites, PrerequisiteError
 
         mock_provider = MagicMock()
         mock_provider.get_balances.side_effect = Exception("Query failed")
@@ -533,9 +534,10 @@ class TestLiveTradingPrerequisites:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        with patch('httpx.get', return_value=mock_response):
+        mock_response.json.return_value = {"result": "0x0"}
+        with patch('httpx.post', return_value=mock_response):
             checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
-            with pytest.raises(ValueError, match="prerequisites failed"):
+            with pytest.raises(PrerequisiteError, match="prerequisites failed"):
                 checker.raise_if_any_failed()
 
     def test_raise_if_any_failed_does_not_raise_when_all_pass(self):
@@ -552,7 +554,8 @@ class TestLiveTradingPrerequisites:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        with patch('httpx.get', return_value=mock_response):
+        mock_response.json.return_value = {"result": "0x0"}
+        with patch('httpx.post', return_value=mock_response):
             checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
             # Should not raise
             checker.raise_if_any_failed()
