@@ -475,3 +475,84 @@ class TestCTFPositions:
             mock_settings.polymarket_positions_url = 'https://api.example.com/markets'
             markets = provider._fetch_active_markets()
         assert markets == []
+
+
+class TestLiveTradingPrerequisites:
+    """Tests for LiveTradingPrerequisites validation."""
+
+    def test_live_prerequisites_fail_if_rpc_unreachable(self):
+        """Prerequisites check fails if RPC is unreachable."""
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+
+        mock_provider = MagicMock()
+        mock_signer = MagicMock()
+        mock_signer.address = '0x' + 'a' * 40
+        mock_settings = MagicMock()
+        mock_settings.polygon_rpc_url = 'https://broken-rpc.example.com'
+        mock_settings.ctf_contract_address = '0x' + 'b' * 40
+        with patch('httpx.get', side_effect=Exception("Connection refused")):
+            checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
+            with pytest.raises(ValueError, match="prerequisites failed"):
+                checker.raise_if_any_failed()
+
+    def test_check_all_returns_list_of_prereq_checks(self):
+        """check_all returns a list of PrereqCheck objects."""
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites, PrereqCheck
+
+        mock_provider = MagicMock()
+        mock_provider.get_balances.return_value = {'usdc': 100.0, 'eth': 0.5}
+        mock_signer = MagicMock()
+        mock_signer.address = '0x' + 'a' * 40
+        mock_settings = MagicMock()
+        mock_settings.polygon_rpc_url = 'https://polygon-rpc.com'
+        mock_settings.ctf_contract_address = '0x' + 'b' * 40
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch('httpx.get', return_value=mock_response):
+            checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
+            checks = checker.check_all()
+
+        assert isinstance(checks, list)
+        assert all(isinstance(c, PrereqCheck) for c in checks)
+        check_names = {c.name for c in checks}
+        expected = {'private_key', 'contract_address', 'rpc_reachable', 'selectors_confirmed', 'balances_queryable'}
+        assert check_names == expected
+
+    def test_raise_if_any_failed_raises_when_check_fails(self):
+        """raise_if_any_failed raises ValueError when a check fails."""
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+
+        mock_provider = MagicMock()
+        mock_provider.get_balances.side_effect = Exception("Query failed")
+        mock_signer = MagicMock()
+        mock_signer.address = '0x' + 'a' * 40
+        mock_settings = MagicMock()
+        mock_settings.polygon_rpc_url = 'https://polygon-rpc.com'
+        mock_settings.ctf_contract_address = '0x' + 'b' * 40
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch('httpx.get', return_value=mock_response):
+            checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
+            with pytest.raises(ValueError, match="prerequisites failed"):
+                checker.raise_if_any_failed()
+
+    def test_raise_if_any_failed_does_not_raise_when_all_pass(self):
+        """raise_if_any_failed is silent when all checks pass."""
+        from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+
+        mock_provider = MagicMock()
+        mock_provider.get_balances.return_value = {'usdc': 100.0, 'eth': 0.5}
+        mock_signer = MagicMock()
+        mock_signer.address = '0x' + 'a' * 40
+        mock_settings = MagicMock()
+        mock_settings.polygon_rpc_url = 'https://polygon-rpc.com'
+        mock_settings.ctf_contract_address = '0x' + 'b' * 40
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        with patch('httpx.get', return_value=mock_response):
+            checker = LiveTradingPrerequisites(mock_provider, mock_signer, mock_settings)
+            # Should not raise
+            checker.raise_if_any_failed()

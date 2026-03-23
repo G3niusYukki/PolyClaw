@@ -33,6 +33,17 @@ class WalletSigner:
         if self._account is None and self._private_key:
             raise ValueError("Invalid private key format: could not derive Ethereum account")
 
+        # NEW: Run full prerequisites check when live_trading_enabled and account is available
+        if settings.live_trading_enabled and self._account is not None:
+            from polyclaw.providers.prerequisites import LiveTradingPrerequisites
+            from polyclaw.providers.ctf import PolymarketCTFProvider
+            try:
+                provider = PolymarketCTFProvider()
+                checker = LiveTradingPrerequisites(provider, self, settings)
+                checker.raise_if_any_failed()
+            except Exception as prereq_exc:
+                raise ValueError(f"Live trading prerequisites not met: {prereq_exc}") from prereq_exc
+
     @property
     def address(self) -> str:
         """Return the Ethereum address derived from the private key."""
