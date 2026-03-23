@@ -309,9 +309,9 @@ class ReconciliationService:
         _api_positions, _api_ok = self.get_api_positions()
         _chain_positions, _chain_ok = self.get_chain_positions()
 
-        if not api_ok:
+        if not _api_ok:
             return False, "POLYMARKET_API positions unavailable — downgrading to read-only"
-        if not chain_ok:
+        if not _chain_ok:
             return False, "CTF chain positions unavailable — downgrading to read-only"
 
         return True, 'all sources available'
