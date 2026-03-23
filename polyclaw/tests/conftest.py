@@ -19,6 +19,15 @@ def reset_registry():
 
 
 @pytest.fixture(autouse=True)
+def reset_signer():
+    """Reset the signer singleton before and after each test."""
+    from polyclaw.providers import signer
+    signer._signer_instance = None
+    yield
+    signer._signer_instance = None
+
+
+@pytest.fixture(autouse=True)
 def fresh_default_db(tmp_path):
     """Ensure the default test DB has a clean schema with all current columns.
 

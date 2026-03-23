@@ -40,9 +40,10 @@ class TestWalletSigner:
         assert signer.address != '0x' + '0' * 40
 
     def test_address_empty_key(self):
-        """Empty key returns all-zeros address."""
+        """Empty key raises ValueError when accessing address."""
         signer = WalletSigner(private_key='')
-        assert signer.address == '0x' + '0' * 40
+        with pytest.raises(ValueError, match="Cannot get address"):
+            _ = signer.address
 
     def test_sign_no_key_raises(self):
         """sign_transaction raises ValueError when no key configured."""
