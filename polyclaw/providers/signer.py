@@ -35,8 +35,8 @@ class WalletSigner:
 
         # NEW: Run full prerequisites check when live_trading_enabled and account is available
         if settings.live_trading_enabled and self._account is not None:
-            from polyclaw.providers.prerequisites import LiveTradingPrerequisites
             from polyclaw.providers.ctf import PolymarketCTFProvider
+            from polyclaw.providers.prerequisites import LiveTradingPrerequisites
             try:
                 provider = PolymarketCTFProvider()
                 checker = LiveTradingPrerequisites(provider, self, settings)

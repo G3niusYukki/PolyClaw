@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = 'sqlite:///./polyclaw.db'
     market_source: str = 'sample'
     polymarket_gamma_url: str = 'https://gamma-api.polymarket.com/markets'
+    polymarket_positions_url: str = ''  # URL for Polymarket user positions API; empty = use PolymarketGammaProvider.get_positions()
     request_timeout_seconds: int = 20
 
     execution_mode: str = 'paper'
