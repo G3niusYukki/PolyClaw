@@ -371,3 +371,107 @@ class TestBalanceAndCancel:
              patch.object(provider, '_get_nonce', return_value=0):
             result = provider._cancel_ctf_order('0x' + 'aabbcc' * 11)
             assert result is True
+
+
+class TestCTFPositions:
+    """Tests for real on-chain position queries via getBalance."""
+
+    def test_query_ctf_positions_returns_list(self):
+        """_query_ctf_positions returns list when markets available."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider()
+        real_signer = WalletSigner(private_key='0x' + 'dd' * 32)
+        provider._signer = real_signer
+
+        # Patch helper methods
+        with patch.object(provider, '_fetch_active_markets', return_value=['0x' + 'a' * 40]), \
+             patch.object(provider, '_query_contract_balance', return_value=1_000_000):
+            positions = provider._query_ctf_positions()
+        assert isinstance(positions, list)
+        assert len(positions) > 0
+        assert positions[0]['side'] in ('yes', 'no')
+        assert positions[0]['size'] == 1.0
+
+    def test_query_ctf_positions_empty_on_error(self):
+        """_query_ctf_positions returns [] on exception."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider()
+        provider._signer = WalletSigner(private_key='0x' + 'dd' * 32)
+        with patch.object(provider, '_fetch_active_markets', side_effect=RuntimeError("RPC error")):
+            positions = provider._query_ctf_positions()
+        assert positions == []
+
+    def test_query_ctf_positions_empty_when_no_signer(self):
+        """_query_ctf_positions returns [] when signer address is zero/raises."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider()
+        provider._signer = WalletSigner(private_key='')
+        # Accessing address on an empty-signer raises ValueError
+        positions = provider._query_ctf_positions()
+        assert positions == []
+
+    def test_query_contract_balance_returns_int(self):
+        """_query_contract_balance returns raw int from eth_call."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider()
+        provider._signer = WalletSigner(private_key='0x' + 'cc' * 32)
+
+        with patch.object(
+            provider,
+            '_rpc_call_with_error_tracking',
+            return_value={'result': '0x00000000000000000000000000000000000000000000000000000000000f4240'},
+        ):
+            balance = provider._query_contract_balance('0x' + 'b' * 40, '0x' + 'c' * 40, 1)
+        assert balance == 1_000_000
+
+    def test_query_contract_balance_zero_on_exception(self):
+        """_query_contract_balance returns 0 when RPC call fails."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider()
+        provider._signer = WalletSigner(private_key='0x' + '11' * 32)
+        with patch.object(provider, '_rpc_call_with_error_tracking', side_effect=RuntimeError("RPC error")):
+            balance = provider._query_contract_balance('0x' + 'b' * 40, '0x' + 'c' * 40, 0)
+        assert balance == 0
+
+    def test_fetch_active_markets_uses_url(self):
+        """_fetch_active_markets calls Polymarket API when URL is configured."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from unittest.mock import MagicMock
+
+        provider = PolymarketCTFProvider()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value=[
+            {'address': '0x' + 'a' * 40},
+            {'address': '0x' + 'b' * 40},
+        ])
+        mock_client = MagicMock(get=MagicMock(return_value=mock_response))
+        with patch.object(provider, '_http_client', mock_client), \
+             patch('polyclaw.providers.ctf.settings') as mock_settings:
+            mock_settings.polymarket_positions_url = 'https://api.example.com/markets'
+            markets = provider._fetch_active_markets()
+        assert len(markets) == 2
+        assert markets[0] == '0x' + 'a' * 40
+
+    def test_fetch_active_markets_returns_empty_on_error(self):
+        """_fetch_active_markets returns [] on exception."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        mock_client = MagicMock(get=MagicMock(side_effect=RuntimeError("Network error")))
+        with patch.object(provider, '_http_client', mock_client), \
+             patch('polyclaw.providers.ctf.settings') as mock_settings:
+            mock_settings.polymarket_positions_url = 'https://api.example.com/markets'
+            markets = provider._fetch_active_markets()
+        assert markets == []

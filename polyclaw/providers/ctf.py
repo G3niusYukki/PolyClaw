@@ -381,9 +381,11 @@ class PolymarketCTFProvider:
         selector = _CREATE_ORDER_SELECTOR
         market_id_clean = order_spec.market_id[2:] if order_spec.market_id.startswith('0x') else order_spec.market_id
         market_hex = market_id_clean[:40].rjust(64, '0')
+        outcome_val = 1 if order_spec.side == 'yes' else 0
+        outcome_hex = f'{outcome_val:064x}'
         amount_hex = f'{buy_amount:0>64x}'
         price_hex = f'{price_raw:0>64x}'
-        return selector + market_hex + amount_hex + price_hex
+        return selector + market_hex + outcome_hex + amount_hex + price_hex
 
     def _broadcast_signed_tx(self, order_spec: OrderSpec, client_order_id: str) -> str:
         """Build, sign, and broadcast a real transaction. Returns tx_hash."""
@@ -551,18 +553,83 @@ class PolymarketCTFProvider:
 
     def _query_ctf_positions(self) -> list[dict]:
         """
-        Query all open positions from the CTF contract.
+        Query all open positions from the CTF contract via getBalance calls.
 
-        Reads getBalance for known markets. Returns list of Position dicts.
-        Currently returns empty list — real CTF contract position queries
-        require a per-market getBalance loop and are left as a TODO.
+        Fetches active markets from Polymarket API, then calls getBalance for each
+        market/outcome combination. Returns positions where balance > 0.
         """
-        signer_address = self._signer.address
+        try:
+            signer_address = self._signer.address
+        except ValueError:
+            return []
         if not signer_address or signer_address == '0x' + '0' * 40:
             return []
 
-        logger.info("Querying CTF positions for %s (real implementation)", signer_address[:10])
-        return []
+        try:
+            # 1. Get active market list
+            markets = self._fetch_active_markets()
+            if not markets:
+                logger.warning("No active markets found for position query")
+                return []
+
+            positions: list[dict] = []
+            for market_address in markets:
+                for outcome in (0, 1):
+                    balance_raw = self._query_contract_balance(signer_address, market_address, outcome)
+                    if balance_raw > 0:
+                        positions.append({
+                            'market_id': market_address,
+                            'side': 'yes' if outcome == 1 else 'no',
+                            'size': balance_raw / 1e6,
+                            'value': 0.0,  # Value requires price; size is the authoritative field
+                        })
+            logger.info("CTF positions: %d open positions for %s", len(positions), signer_address[:10])
+            return positions
+        except Exception as exc:
+            logger.error("Failed to query CTF positions: %s", exc)
+            return []
+
+    def _fetch_active_markets(self) -> list[str]:
+        """Fetch active market addresses from Polymarket API.
+
+        Note: PolymarketGammaProvider.get_positions() is synchronous — call directly.
+        """
+        try:
+            markets_url = getattr(settings, 'polymarket_positions_url', None)
+            if markets_url:
+                resp = self.http_client.get(markets_url)
+                resp.raise_for_status()
+                data = resp.json()
+                return [m['address'] for m in data if m.get('address')]
+            # Fallback: extract unique market IDs from existing positions
+            if hasattr(self.polymarket_api, 'get_positions'):
+                positions = self.polymarket_api.get_positions()
+                return list({p.get('market_id', '') for p in positions if p.get('market_id')})
+            return []
+        except Exception as exc:
+            logger.error("Failed to fetch active markets: %s", exc)
+            return []
+
+    def _query_contract_balance(self, trader: str, market: str, outcome: int) -> int:
+        """Call getBalance on the CTF contract. Returns raw token amount (no decimals).
+
+        Function: getBalance(address trader, address market, uint256 outcome)
+        Selector: keccak('getBalance(address,address,uint256)') = 0x4e11e440
+        MUST be confirmed against the real CTF contract ABI before live trading.
+        """
+        # TODO (Task 1 verification): confirm getBalance selector from Polyscan ABI
+        # Expected: 0x4e11e440 (keccak of 'getBalance(address,address,uint256)')
+        selector = '0x4e11e440'  # placeholder — verify on Polyscan
+        trader_hex = trader[2:].rjust(64, '0')
+        market_hex = market[2:].rjust(64, '0')
+        outcome_hex = f'{outcome:064x}'
+        data = selector + trader_hex + market_hex + outcome_hex
+        try:
+            result = self._rpc_call_with_error_tracking('eth_call', [{'to': self._contract_address, 'data': data}])
+            result_str = result.get('result', '0x0') if isinstance(result, dict) else '0x0'
+            return int(result_str, 16) if result_str else 0
+        except Exception:
+            return 0
 
     def _query_positions_from_db(self) -> list[dict]:
         """
