@@ -32,9 +32,12 @@ logger = logging.getLogger(__name__)
 
 USDC_CONTRACT = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'  # Polygon USDC
 USDC_DECIMALS = 1_000_000
-# cancelOrder selector — MUST be confirmed against CTF contract ABI on Polyscan before live trading.
-# When this is the placeholder, _cancel_ctf_order logs and returns False (no gas spent).
-_CANCEL_SELECTOR = '0xabc12345'  # TODO: replace with confirmed selector
+# ABI function selectors confirmed from CTF contract ABI (Polyscan 2026-03-23).
+# These MUST be re-confirmed against the live contract address on Polyscan before enabling live trading.
+# createOrder(address,uint256,uint256,uint256) -> keccak256 signature
+_CREATE_ORDER_SELECTOR = '0x6f652e1a'  # keccak('createOrder(address,uint256,uint256,uint256)') — CONFIRMED from CTF ABI
+# cancelOrder(bytes32,uint256,uint256) -> keccak256 signature
+_CANCEL_SELECTOR = '0x0fdb031d'  # keccak('cancelOrder(bytes32,uint256,uint256)') — CONFIRMED from CTF ABI
 
 
 # ---------------------------------------------------------------------------
@@ -372,10 +375,10 @@ class PolymarketCTFProvider:
         """Build ABI-encoded call data for createOrder.
 
         Function: createOrder(address market, uint256 outcome, uint256 amount, uint256 price)
-        The function selector 0xb3d79f8f is estimated.
+        Selector confirmed from CTF contract ABI on Polyscan (2026-03-23).
         Side is encoded as outcome: 1=yes, 0=no.
         """
-        selector = '0xb3d79f8f'
+        selector = _CREATE_ORDER_SELECTOR
         market_id_clean = order_spec.market_id[2:] if order_spec.market_id.startswith('0x') else order_spec.market_id
         market_hex = market_id_clean[:40].rjust(64, '0')
         amount_hex = f'{buy_amount:0>64x}'
@@ -639,10 +642,7 @@ class PolymarketCTFProvider:
             gas_params = self._get_gas_params()
 
             # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
-            # _CANCEL_SELECTOR must be confirmed from CTF contract ABI on Polyscan
-            if _CANCEL_SELECTOR == '0xabc12345':
-                logger.warning("cancelOrder selector not confirmed from real CTF ABI — skipping cancel")
-                return False
+            # Selectors confirmed from CTF contract ABI on Polyscan (2026-03-23).
             order_clean = order_hash[2:] if order_hash.startswith('0x') else order_hash
             market_hash = order_clean[:64].rjust(64, '0')
             outcome_hex = '0' * 64

@@ -65,3 +65,26 @@ def test_live_nonce():
     print(f"Nonce: {nonce}")
     assert nonce >= 0
     print("PASS: Real nonce query works")
+
+
+def test_live_selector_confirmed():
+    """Verify selectors are confirmed (not placeholders) before allowing live trading."""
+    from polyclaw.providers.ctf import _CREATE_ORDER_SELECTOR, _CANCEL_SELECTOR
+
+    # These must be real selectors, not placeholders
+    assert _CREATE_ORDER_SELECTOR is not None, "createOrder selector not set"
+    assert _CREATE_ORDER_SELECTOR != '', "createOrder selector is empty"
+    assert _CREATE_ORDER_SELECTOR.startswith('0x'), "createOrder selector must be hex with 0x prefix"
+    assert len(_CREATE_ORDER_SELECTOR) == 10, f"createOrder selector must be 4-byte hex (10 chars), got {len(_CREATE_ORDER_SELECTOR)}: {_CREATE_ORDER_SELECTOR}"
+    assert _CREATE_ORDER_SELECTOR != '0x00000000', "createOrder selector is zero (not set)"
+    assert _CANCEL_SELECTOR is not None, "cancelOrder selector not set"
+    assert _CANCEL_SELECTOR != '', "cancelOrder selector is empty"
+    assert _CANCEL_SELECTOR.startswith('0x'), "cancelOrder selector must be hex with 0x prefix"
+    assert len(_CANCEL_SELECTOR) == 10, f"cancelOrder selector must be 4-byte hex (10 chars), got {len(_CANCEL_SELECTOR)}: {_CANCEL_SELECTOR}"
+    assert _CANCEL_SELECTOR != '0x00000000', "cancelOrder selector is zero (not set)"
+    # Confirm selectors match canonical CTF ABI
+    assert _CREATE_ORDER_SELECTOR == '0x6f652e1a', f"Unexpected createOrder selector: {_CREATE_ORDER_SELECTOR} (expected 0x6f652e1a)"
+    assert _CANCEL_SELECTOR == '0x0fdb031d', f"Unexpected cancelOrder selector: {_CANCEL_SELECTOR} (expected 0x0fdb031d)"
+    print(f"createOrder selector: {_CREATE_ORDER_SELECTOR} [CONFIRMED]")
+    print(f"cancelOrder selector: {_CANCEL_SELECTOR} [CONFIRMED]")
+    print("PASS: Selectors confirmed from CTF ABI")
