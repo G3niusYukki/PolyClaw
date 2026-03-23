@@ -29,8 +29,8 @@ The current selector `0xb3d79f8f` in `_build_call_data` (line 378) is estimated.
 Add to `ctf.py` module constants:
 ```python
 # Confirmed selectors from CTF contract ABI (Polyscan 2026-03-23)
-_CREATE_ORDER_SELECTOR = '0xb3d79f8f'  # keccak('createOrder(address,uint256,uint256,uint256)') — CONFIRMED
-_CANCEL_ORDER_SELECTOR = '0x<POLYSCAN_CONFIRMED>'  # keccak('cancelOrder(bytes32,uint256,uint256)') — PENDING
+_CREATE_ORDER_SELECTOR = '0xb3d79b8f'  # keccak('createOrder(address,uint256,uint256,uint256)') — CONFIRM via Polyscan
+_CANCEL_SELECTOR = '0x<POLYSCAN_CONFIRMED>'  # keccak('cancelOrder(bytes32,uint256,uint256)') — PENDING
 ```
 
 Also confirm `cancelOrder` selector. The current `_CANCEL_SELECTOR = '0xabc12345'` is a placeholder that returns `False` — this must be replaced with the real value before live trading is enabled.
@@ -68,17 +68,17 @@ if _CANCEL_SELECTOR == '0xabc12345':
 ```python
 def test_live_selector_confirmed():
     """Verify selectors are confirmed (not placeholders) before allowing live trading."""
-    from polyclaw.providers.ctf import _CREATE_ORDER_SELECTOR, _CANCEL_ORDER_SELECTOR
+    from polyclaw.providers.ctf import _CREATE_ORDER_SELECTOR, _CANCEL_SELECTOR
     from polyclaw.config import settings
 
     # These must be real selectors, not placeholders
     assert _CREATE_ORDER_SELECTOR != '0x00000000', "createOrder selector not set"
     assert len(_CREATE_ORDER_SELECTOR) == 10, "createOrder selector must be 4-byte hex"
-    assert _CANCEL_ORDER_SELECTOR != '0x00000000', "cancelOrder selector not set"
-    assert len(_CANCEL_ORDER_SELECTOR) == 10, "cancelOrder selector must be 4-byte hex"
+    assert _CANCEL_SELECTOR != '0x00000000', "cancelOrder selector not set"
+    assert len(_CANCEL_SELECTOR) == 10, "cancelOrder selector must be 4-byte hex"
     # The placeholder guard is removed; selectors must be confirmed
     print(f"createOrder selector: {_CREATE_ORDER_SELECTOR}")
-    print(f"cancelOrder selector: {_CANCEL_ORDER_SELECTOR}")
+    print(f"cancelOrder selector: {_CANCEL_SELECTOR}")
 ```
 
 Run: `python -m pytest polyclaw/tests/test_live_smoke.py::test_live_selector_confirmed -v -s`
@@ -102,6 +102,24 @@ git commit -m "feat: confirm real ABI selectors for createOrder and cancelOrder
 **Files:**
 - Modify: `polyclaw/providers/ctf.py`
 - Test: `polyclaw/tests/test_ctf_provider.py`
+
+### Step 0: Fix `_build_call_data` — Add Missing `outcome` Encoding (CRITICAL)
+
+**⚠️ This is a production bug fix. The current `_build_call_data` encodes only 3 fields (market, amount, price) but `createOrder(address market, uint256 outcome, uint256 amount, uint256 price)` takes 4 args. The `outcome` bytes are missing entirely — every real order would submit with garbage/out-of-range outcome bytes, likely causing contract reverts.**
+
+Find the `_build_call_data` method in `ctf.py` and update the return statement:
+
+```python
+# ctf.py — in _build_call_data, find and replace the return statement:
+# BEFORE (missing outcome):
+# return selector + market_hex + amount_hex + price_hex
+# AFTER (outcome included, correct ABI encoding order):
+outcome_val = 1 if order_spec.side == 'yes' else 0
+outcome_hex = f'{outcome_val:064x}'
+return selector + market_hex + outcome_hex + amount_hex + price_hex
+```
+
+**Verification:** After applying, `len(calldata) == 10 + 64*4 == 266` hex chars.
 
 ### Step 1: Understand the PolymarketGammaProvider market list
 
@@ -153,41 +171,39 @@ def _query_ctf_positions(self) -> list[dict]:
         return []
 
 def _fetch_active_markets(self) -> list[str]:
-    """Fetch active market addresses from Polymarket API."""
+    """Fetch active market addresses from Polymarket API.
+
+    Note: PolymarketGammaProvider.get_positions() is synchronous — call directly.
+    """
     try:
         markets_url = getattr(settings, 'polymarket_positions_url', None)
-        if not markets_url:
-            # Fallback: use the existing PolymarketGammaProvider
-            if hasattr(self.polymarket_api, 'get_positions'):
-                result = self.polymarket_api.get_positions()
-                if asyncio.iscoroutine(result):
-                    import asyncio as _asyncio
-                    try:
-                        loop = _asyncio.get_running_loop()
-                    except RuntimeError:
-                        result = _asyncio.run(result)
-                    else:
-                        result = loop.run_until_complete(result)
-                # Extract unique market IDs from positions
-                return list({p.get('market_id', '') for p in result if p.get('market_id')})
-            return []
-        resp = self.http_client.get(markets_url)
-        resp.raise_for_status()
-        data = resp.json()
-        return [m['address'] for m in data if m.get('address')]
+        if markets_url:
+            resp = self.http_client.get(markets_url)
+            resp.raise_for_status()
+            data = resp.json()
+            return [m['address'] for m in data if m.get('address')]
+        # Fallback: extract unique market IDs from existing positions
+        if hasattr(self.polymarket_api, 'get_positions'):
+            positions = self.polymarket_api.get_positions()
+            return list({p.get('market_id', '') for p in positions if p.get('market_id')})
+        return []
     except Exception as exc:
         logger.error("Failed to fetch active markets: %s", exc)
         return []
 
 def _query_contract_balance(self, trader: str, market: str, outcome: int) -> int:
-    """Call getBalance on the CTF contract. Returns raw token amount (no decimals)."""
-    # getBalance(address trader, address market, uint256 outcome) → uint256
-    # Selector: keccak('getBalance(address,address,uint256)')
-    # Note: Confirm this selector from Polyscan ABI
-    selector = '0x' + 'x' * 8  # TODO: confirm from Polyscan
+    """Call getBalance on the CTF contract. Returns raw token amount (no decimals).
+
+    Function: getBalance(address trader, address market, uint256 outcome)
+    Selector: keccak('getBalance(address,address,uint256)') = 0x<CONFIRM_FROM_POLYSCAN>
+    MUST be confirmed against the real CTF contract ABI before live trading.
+    """
+    # TODO (Task 1 verification): confirm getBalance selector from Polyscan ABI
+    # Expected: 0x4e11e440 (keccak of 'getBalance(address,address,uint256)')
+    selector = '0x4e11e440'  # placeholder — verify on Polyscan
     trader_hex = trader[2:].rjust(64, '0')
     market_hex = market[2:].rjust(64, '0')
-    outcome_hex = f'{outcome:064d}'
+    outcome_hex = f'{outcome:064x}'
     data = selector + trader_hex + market_hex + outcome_hex
     try:
         result = self._rpc_call_with_error_tracking('eth_call', [{'to': self._contract_address, 'data': data}])
@@ -283,6 +299,7 @@ def live_provider():
     if not pk:
         pytest.skip("CTF_PRIVATE_KEY not set")
 
+    # WalletSigner() reads CTF_PRIVATE_KEY env var internally
     signer = WalletSigner()
     provider = PolymarketCTFProvider()
     provider._signer = signer
@@ -319,6 +336,8 @@ def test_live_full_pipeline_sign_broadcast_receipt_fill(live_provider, test_mark
     print("PASS: Gas and nonce query OK")
 
     # 3. SUBMIT ORDER — small $1 notional
+    # NOTE: notional_usd is a @property on OrderSpec (computed as price * size),
+    # not a constructor arg — do NOT pass it.
     from polyclaw.execution.orders import OrderSpec, OrderType
     order_spec = OrderSpec(
         type=OrderType.LIMIT,
@@ -359,8 +378,20 @@ def test_live_full_pipeline_sign_broadcast_receipt_fill(live_provider, test_mark
         print(f"Cancel raised (may be expected if filled): {exc}")
 
     # 8. RECONCILIATION — run a reconciliation cycle
+    # NOTE: ReconciliationService(session, ctf_provider, polymarket_api) — all three required.
+    # Uses live_provider's ctf_provider; polymarket_api is optional (falls back gracefully).
     from polyclaw.reconciliation.service import ReconciliationService
-    svc = ReconciliationService()
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    # Use in-memory SQLite for the smoke test (avoids DB dependency)
+    engine = create_engine('sqlite:///:memory:')
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    svc = ReconciliationService(
+        session=session,
+        ctf_provider=live_provider,
+        polymarket_api=None,  # will log and continue on failure
+    )
     report = svc.reconcile()
     print(f"Reconciliation: drift_detected={report.drift_detected}, total_drift=${report.total_drift_usd}")
     assert isinstance(report.total_drift_usd, float)
@@ -460,7 +491,7 @@ class LiveTradingPrerequisites:
         # 4. Selectors confirmed (not placeholders)
         from polyclaw.providers import ctf as ctf_module
         create_sel = getattr(ctf_module, '_CREATE_ORDER_SELECTOR', '0x00000000')
-        cancel_sel = getattr(ctf_module, '_CANCEL_ORDER_SELECTOR', '0x00000000')
+        cancel_sel = getattr(ctf_module, '_CANCEL_SELECTOR', '0x00000000')
         placeholders = create_sel == '0x00000000' or cancel_sel == '0x00000000' or \
                        create_sel == '0xabc12345' or cancel_sel == '0xabc12345'
         checks.append(PrereqCheck(
@@ -565,15 +596,29 @@ git commit -m "feat: add LiveTradingPrerequisites validation at startup
 
 ### Step 1: Add position availability tracking to `ReconciliationService`
 
-Modify `ReconciliationService.__init__` to accept a `mode` parameter:
+Modify `ReconciliationService.__init__` to accept an optional `mode` parameter (keep existing params as-is — renaming would break existing call sites):
 ```python
-def __init__(self, market_provider, ctf_provider, session, mode: str = 'live'):
+def __init__(self, session, ctf_provider, polymarket_api, auto_close_threshold=None, mode: str = 'paper'):
     # ...
     self._mode = mode
 ```
 
 ### Step 2: Modify `get_api_positions` and `get_chain_positions` to signal availability
 
+**NOTE:** Changing these return types from `dict` to `tuple[dict, bool]` is a **breaking change** that will break existing code in `reconcile()`. The plan must update `reconcile()` to unpack the new return types, and also update all test mocks that call `get_api_positions` / `get_chain_positions`.
+
+In `reconcile()`, update the call sites:
+```python
+# In reconcile() — replace these two calls:
+# BEFORE:
+# api_positions = self.get_api_positions()
+# chain_positions = self.get_chain_positions()
+# AFTER:
+api_positions, api_available = self.get_api_positions()
+chain_positions, chain_available = self.get_chain_positions()
+```
+
+Update the return signatures:
 ```python
 def get_api_positions(self) -> tuple[dict[str, PositionSummary], bool]:
     """Fetch positions from Polymarket API. Returns (positions, available)."""
@@ -615,7 +660,7 @@ def can_trade_live(self) -> tuple[bool, str]:
 
 ### Step 4: Wire into `ExecutionService`
 
-In `polyclaw/services/execution.py`, before executing an order in live mode, call `can_trade_live()`:
+In `polyclaw/services/execution.py`, before executing an order in live mode, call `can_trade_live()`. The live order dispatch is in `_process_real_decisions()` (NOT `execute_live_orders` — that method does not exist):
 
 ```python
 def _check_live_trading_allowed(self) -> None:
@@ -623,9 +668,9 @@ def _check_live_trading_allowed(self) -> None:
     from polyclaw.reconciliation.service import ReconciliationService
     try:
         svc = ReconciliationService(
-            market_provider=self.market_provider,
+            session=self.session,
             ctf_provider=self.ctf_provider,
-            session=None,
+            polymarket_api=self.polymarket_api,
             mode='live',
         )
         allowed, reason = svc.can_trade_live()
@@ -636,7 +681,7 @@ def _check_live_trading_allowed(self) -> None:
         raise RuntimeError(f"Live trading blocked: cannot verify position sources") from exc
 ```
 
-Call `_check_live_trading_allowed()` at the start of `execute_live_orders()` (or wherever live orders are dispatched).
+Call `_check_live_trading_allowed()` at the start of `_process_real_decisions()` (the actual live execution method in `ExecutionService`). Note: `ExecutionService.__init__` stores `self.session`, `self.ctf_provider`, and `self.polymarket_api` — use those directly rather than constructing new instances.
 
 ### Step 5: Add tests
 
@@ -645,9 +690,9 @@ def test_can_trade_live_blocks_when_api_unavailable(mocker):
     """can_trade_live returns False when API positions unavailable."""
     from polyclaw.reconciliation.service import ReconciliationService
     svc = ReconciliationService(
-        market_provider=mocker.MagicMock(),
+        session=mocker.MagicMock(),
         ctf_provider=mocker.MagicMock(),
-        session=None,
+        polymarket_api=mocker.MagicMock(),
         mode='live',
     )
     mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
@@ -660,9 +705,9 @@ def test_can_trade_live_blocks_when_chain_unavailable(mocker):
     """can_trade_live returns False when chain positions unavailable."""
     from polyclaw.reconciliation.service import ReconciliationService
     svc = ReconciliationService(
-        market_provider=mocker.MagicMock(),
+        session=mocker.MagicMock(),
         ctf_provider=mocker.MagicMock(),
-        session=None,
+        polymarket_api=mocker.MagicMock(),
         mode='live',
     )
     mocker.patch.object(svc, 'get_api_positions', return_value=({}, True))
@@ -675,9 +720,9 @@ def test_can_trade_live_allows_paper_mode(mocker):
     """can_trade_live allows when mode is paper (no gating)."""
     from polyclaw.reconciliation.service import ReconciliationService
     svc = ReconciliationService(
-        market_provider=mocker.MagicMock(),
+        session=mocker.MagicMock(),
         ctf_provider=mocker.MagicMock(),
-        session=None,
+        polymarket_api=mocker.MagicMock(),
         mode='paper',
     )
     mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
@@ -698,9 +743,10 @@ Expected: PASS
 git add polyclaw/reconciliation/service.py polyclaw/services/execution.py polyclaw/tests/test_reconciliation.py
 git commit -m "feat: reconciliation gating — block live trading when position sources unavailable
 
+- Add mode parameter to ReconciliationService (paper=live gating disabled)
 - get_api_positions and get_chain_positions return (positions, available) tuple
 - can_trade_live() returns (allowed, reason) — blocks live if either source unavailable
-- Wire into ExecutionService.execute_live_orders() for fail-safe"
+- Wire into ExecutionService._process_real_decisions() for fail-safe"
 ```
 
 ---
