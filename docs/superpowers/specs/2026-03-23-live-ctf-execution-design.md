@@ -68,23 +68,42 @@ class WalletSigner:
         return "0x" + "0" * 40
 
     def sign_transaction(self, tx_data: dict) -> str:
-        """Sign an Ethereum transaction. Returns r+s+v concatenated hex."""
+        """Sign an Ethereum transaction. Returns RLP-encoded signed transaction hex.
+
+        Uses `rawTransaction.hex()` which is the full wire-format hex string
+        accepted by eth_sendRawTransaction.
+        """
         if not self._account:
             raise ValueError("Cannot sign: no private key configured")
         signed = self._account.sign_transaction(tx_data)
-        return signed.r.to_bytes(32, "big").hex() + \
-               signed.s.to_bytes(32, "big").hex() + \
-               format(signed.v, "x")
+        return signed.rawTransaction.hex()
 ```
+
+### Nonce Management
+
+Fetch `nonce` per submission via `eth_getTransactionCount(signer_address, "pending")`.
+Do not maintain a local counter — concurrent or sequential rapid orders must each re-fetch to avoid nonce gaps or collisions. The RPC call is atomic per order submission.
 
 ## Order Submission Flow
 
+**Polygon chain ID: 137**
+
 ```
 OrderSpec.to_ctf_payload()
-  → build unsigned tx dict {to, data, gas, gasPrice, nonce, chainId, value}
+  → build unsigned tx dict
+    {
+      to:         CTF_CONTRACT_ADDRESS,
+      data:       ABI-encode(createOrder(...)),
+      chainId:    137,
+      nonce:      eth_getTransactionCount(signer, "pending"),
+      type:       2,                         # EIP-1559
+      maxFeePerGas:         eth_maxPriorityFeePerGas + 2 * eth_baseFee,
+      maxPriorityFeePerGas: eth_maxPriorityFeePerGas,
+      gas:        estimate via eth_estimateGas, fallback 500000,
+      value:      0
+    }
   → WalletSigner.sign_transaction(tx_dict)
-  → sign → raw_tx_bytes
-  → POST / {method: "eth_sendRawTransaction", params: [raw_tx_hex]}
+  → POST eth_sendRawTransaction [raw_tx_hex]
   → tx_hash
   → poll eth_getTransactionReceipt every 2s, timeout 120s
   → parse receipt {status, gasUsed, logs}
@@ -92,21 +111,77 @@ OrderSpec.to_ctf_payload()
   → write to DB
 ```
 
-### CTF Contract Interaction
+**Gas strategy:** Always use EIP-1559 (type 2). Fetch `eth_maxPriorityFeePerGas` and `eth_baseFee` per transaction. Polygon block time ≈ 2s so gas should be fresh on each call.
+
+### CTF Contract ABI
 
 CTF contract address: `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`
+Polygon chain ID: **137**
+
+Minimal ABI fragment needed:
+
+```json
+[
+  {
+    "name": "createOrder",
+    "type": "function",
+    "inputs": [
+      {"name": "market", "type": "address"},
+      {"name": "outcome", "type": "uint256"},
+      {"name": "amount", "type": "uint256"},
+      {"name": "price", "type": "uint256"}
+    ]
+  },
+  {
+    "name": "cancelOrder",
+    "type": "function",
+    "inputs": [
+      {"name": "marketHash", "type": "bytes32"},
+      {"name": "outcome", "type": "uint256"},
+      {"name": "price", "type": "uint256"}
+    ]
+  },
+  {
+    "name": "getBalance",
+    "type": "function",
+    "inputs": [
+      {"name": "trader", "type": "address"},
+      {"name": "market", "type": "address"},
+      {"name": "outcome", "type": "uint256"}
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "name": "getCollateralBalance",
+    "type": "function",
+    "inputs": [{"name": "trader", "type": "address"}],
+    "stateMutability": "view"
+  },
+  {
+    "name": "getOrder",
+    "type": "function",
+    "inputs": [
+      {"name": "trader", "type": "address"},
+      {"name": "marketHash", "type": "bytes32"},
+      {"name": "price", "type": "uint256"},
+      {"name": "outcome", "type": "uint256"}
+    ],
+    "stateMutability": "view"
+  }
+]
+```
+
+All integer values are raw (no decimals). USDC uses 6 decimals: `raw / 1_000_000`.
 
 Key methods called via `eth_call` / `eth_sendTransaction`:
 
 | Method | Type | Purpose |
 |--------|------|---------|
-| `createOrder(...)` | send | Submit new order |
-| `cancelOrder(...)` | send | Cancel existing order |
+| `createOrder(market, outcome, amount, price)` | send | Submit new order |
+| `cancelOrder(marketHash, outcome, price)` | send | Cancel existing order |
 | `getBalance(trader, market, outcome)` | call | Position size |
 | `getCollateralBalance(trader)` | call | USDC balance |
 | `getOrder(trader, marketHash, price, outcome)` | call | Order status |
-
-All values are raw integers. USDC uses 6 decimals: `raw / 1_000_000`.
 
 ## Protected Failure Modes
 
@@ -127,7 +202,7 @@ All failures logged to `AuditLog` with `component="ctf_live"`.
 
 Before shadow→live stage upgrade, execute and document:
 
-1. Submit one $1 USDT buy order manually via API
+1. Submit one $1 USDC buy order manually via API
 2. Confirm `eth_getTransactionReceipt` shows `status=1`
 3. Confirm `get_positions()` returns correct size
 4. Confirm `get_balances()` returns correct USDC
