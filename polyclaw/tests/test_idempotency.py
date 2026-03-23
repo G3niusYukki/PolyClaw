@@ -23,9 +23,19 @@ def _mock_order(client_order_id: str, status='submitted'):
 class TestIdempotentOrderSubmission:
     """Tests for idempotent order submission via client_order_id."""
 
+    def setup_method(self):
+        """Set up a provider with a mock signer and broadcast for all tests."""
+        from unittest.mock import patch
+        from polyclaw.providers.signer import WalletSigner
+        self.provider = PolymarketCTFProvider()
+        # Use a real signer so that _broadcast_signed_tx doesn't fail on address lookup
+        self.provider._signer = WalletSigner(private_key='0x' + 'ee' * 32)
+        # Also patch _broadcast_signed_tx so tests don't need to mock it individually
+        patch.object(self.provider, '_broadcast_signed_tx', return_value='0x' + 'ab' * 32).start()
+
     def test_duplicate_order_returns_cached_result(self):
         """Submitting an order with the same client_order_id twice returns cached result."""
-        provider = PolymarketCTFProvider()
+        provider = self.provider
         client_id = 'unique-idempotent-key-456'
         order_spec = OrderSpec(
             type=OrderType.LIMIT,
@@ -59,7 +69,7 @@ class TestIdempotentOrderSubmission:
 
     def test_different_client_order_ids_produce_different_orders(self):
         """Different client_order_ids create separate orders."""
-        provider = PolymarketCTFProvider()
+        provider = self.provider
         results = {}
         for client_id in ['order-key-A', 'order-key-B']:
             order_spec = OrderSpec(
@@ -75,7 +85,7 @@ class TestIdempotentOrderSubmission:
 
     def test_auto_generated_client_order_id(self):
         """OrderSpec without client_order_id gets auto-generated."""
-        provider = PolymarketCTFProvider()
+        provider = self.provider
         order_spec = OrderSpec(
             type=OrderType.LIMIT, side='no', price=0.45, size=5.0,
             market_id='auto-id-market', outcome='no',
@@ -93,7 +103,7 @@ class TestIdempotentOrderSubmission:
 
     def test_idempotency_across_order_types(self):
         """Idempotency works for all order types."""
-        provider = PolymarketCTFProvider()
+        provider = self.provider
         client_id = 'idempotent-limit-order'
         mock_order = _mock_order(client_id)
         with patch.object(provider, '_get_existing_order', return_value=None), \
@@ -109,7 +119,7 @@ class TestIdempotentOrderSubmission:
 
     def test_backward_compatible_submit_order_is_idempotent(self):
         """The backward-compatible submit_order() is also idempotent."""
-        provider = PolymarketCTFProvider()
+        provider = self.provider
         mock_market = MagicMock()
         mock_market.market_id = 'backward-market'
         mock_market.outcome_yes_price = 0.55
