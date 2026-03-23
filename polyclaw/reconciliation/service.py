@@ -49,6 +49,8 @@ class ReconciliationService:
         ctf_provider: 'PolymarketCTFProvider',
         polymarket_api: 'PolymarketGammaProvider',
         auto_close_threshold: float | None = None,
+        *,
+        mode: str = 'paper',
     ):
         """
         Initialize the reconciliation service.
@@ -59,6 +61,8 @@ class ReconciliationService:
             polymarket_api: Provider for Polymarket REST API data.
             auto_close_threshold: USD threshold for triggering auto-close.
                                   Defaults to 10.0.
+            mode: Execution mode — 'paper' or 'live'. When 'live', can_trade_live()
+                 will block execution if position sources are unavailable.
         """
         self.session = session
         self.ctf_provider = ctf_provider
@@ -67,6 +71,7 @@ class ReconciliationService:
         self.detector = DiscrepancyDetector(tolerance=0.01)
         self.drift_alerts = DriftAlerts()
         self._last_report: ReconciliationReport | None = None
+        self._mode = mode
 
     def reconcile(self) -> ReconciliationReport:
         """
@@ -86,8 +91,8 @@ class ReconciliationService:
 
         # Step 1: Gather positions from all three sources
         system_positions = self.get_system_positions(self.session)
-        api_positions = self.get_api_positions()
-        chain_positions = self.get_chain_positions()
+        api_positions, _api_available = self.get_api_positions()
+        chain_positions, _chain_available = self.get_chain_positions()
 
         log_event(
             self.session,
@@ -182,12 +187,13 @@ class ReconciliationService:
             for row in rows
         }
 
-    def get_api_positions(self) -> dict[str, PositionSummary]:
+    def get_api_positions(self) -> tuple[dict[str, PositionSummary], bool]:
         """
         Fetch positions from the Polymarket REST API (via PolymarketGammaProvider).
 
         Returns:
-            A dict mapping market_id -> PositionSummary.
+            A tuple of (dict mapping market_id -> PositionSummary, available bool).
+            The available flag is False when the API call fails or returns empty.
         """
         import asyncio
         import logging
@@ -211,7 +217,8 @@ class ReconciliationService:
                 positions = []
         except Exception as exc:
             logger.error("Failed to fetch API positions: %s", exc)
-            positions = []
+            logger.warning("API positions unavailable — live trading blocked")
+            return {}, False
 
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
@@ -225,14 +232,18 @@ class ReconciliationService:
                     avg_price=pos_dict.get('avg_price', 0.0),
                     source='POLYMARKET_API',
                 )
-        return result
+        if not result:
+            logger.warning("API positions unavailable — live trading blocked")
+            return {}, False
+        return result, True
 
-    def get_chain_positions(self) -> dict[str, PositionSummary]:
+    def get_chain_positions(self) -> tuple[dict[str, PositionSummary], bool]:
         """
         Fetch positions from the CTF blockchain contract (via PolymarketCTFProvider).
 
         Returns:
-            A dict mapping market_id -> PositionSummary.
+            A tuple of (dict mapping market_id -> PositionSummary, available bool).
+            The available flag is False when the chain call fails or returns empty.
         """
         import asyncio
         import logging
@@ -253,7 +264,8 @@ class ReconciliationService:
                     positions = loop.run_until_complete(positions)
         except Exception as exc:
             logger.error("Failed to fetch chain positions: %s", exc)
-            positions = []
+            logger.warning("Chain positions unavailable — live trading blocked")
+            return {}, False
 
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
@@ -267,7 +279,10 @@ class ReconciliationService:
                     avg_price=pos_dict.get('avg_price', 0.0),
                     source='CTF_CONTRACT',
                 )
-        return result
+        if not result:
+            logger.warning("Chain positions unavailable — live trading blocked")
+            return {}, False
+        return result, True
 
     def should_auto_close(self, total_drift_usd: float) -> bool:
         """
@@ -280,6 +295,26 @@ class ReconciliationService:
             True if total drift exceeds the auto-close threshold.
         """
         return total_drift_usd > self.auto_close_threshold
+
+    def can_trade_live(self) -> tuple[bool, str]:
+        """
+        Check if live trading should proceed. Returns (allowed, reason).
+
+        When mode is 'paper', always returns True (no gating).
+        When mode is 'live', checks that both position sources are available.
+        """
+        if self._mode != 'live':
+            return True, 'not in live mode'
+
+        api_positions, api_ok = self.get_api_positions()
+        chain_positions, chain_ok = self.get_chain_positions()
+
+        if not api_ok:
+            return False, "POLYMARKET_API positions unavailable — downgrading to read-only"
+        if not chain_ok:
+            return False, "CTF chain positions unavailable — downgrading to read-only"
+
+        return True, 'all sources available'
 
     def _auto_close(
         self,

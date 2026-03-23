@@ -302,7 +302,8 @@ class TestReconciliationService:
         svc.polymarket_api.get_positions = MagicMock(return_value=[
             {'market_id': 'm1', 'side': 'yes', 'size': 10.0, 'value': 5.5}
         ])
-        positions = svc.get_api_positions()
+        positions, available = svc.get_api_positions()
+        assert available is True
         assert len(positions) == 1
         assert positions['m1'].source == 'POLYMARKET_API'
         assert positions['m1'].side == 'yes'
@@ -321,13 +322,59 @@ class TestReconciliationService:
         svc.ctf_provider.get_positions = MagicMock(return_value=[
             {'market_id': 'm1', 'side': 'yes', 'size': 10.0, 'value': 5.5}
         ])
-        positions = svc.get_chain_positions()
+        positions, available = svc.get_chain_positions()
+        assert available is True
         assert len(positions) == 1
         assert positions['m1'].source == 'CTF_CONTRACT'
         assert positions['m1'].side == 'yes'
         assert positions['m1'].quantity == 10.0
         assert positions['m1'].notional_usd == 5.5
         svc.ctf_provider.get_positions.assert_called_once()
+
+    def test_can_trade_live_blocks_when_api_unavailable(self, mocker):
+        """can_trade_live returns False when API positions unavailable."""
+        from polyclaw.reconciliation.service import ReconciliationService
+        svc = ReconciliationService(
+            session=MagicMock(),
+            ctf_provider=MagicMock(),
+            polymarket_api=MagicMock(),
+            mode='live',
+        )
+        mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
+        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, True))
+        allowed, reason = svc.can_trade_live()
+        assert allowed is False
+        assert 'API positions unavailable' in reason
+
+    def test_can_trade_live_blocks_when_chain_unavailable(self, mocker):
+        """can_trade_live returns False when chain positions unavailable."""
+        from polyclaw.reconciliation.service import ReconciliationService
+        svc = ReconciliationService(
+            session=MagicMock(),
+            ctf_provider=MagicMock(),
+            polymarket_api=MagicMock(),
+            mode='live',
+        )
+        mocker.patch.object(svc, 'get_api_positions', return_value=({}, True))
+        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, False))
+        allowed, reason = svc.can_trade_live()
+        assert allowed is False
+        assert 'chain positions unavailable' in reason
+
+    def test_can_trade_live_allows_paper_mode(self, mocker):
+        """can_trade_live allows when mode is paper (no gating)."""
+        from polyclaw.reconciliation.service import ReconciliationService
+        svc = ReconciliationService(
+            session=MagicMock(),
+            ctf_provider=MagicMock(),
+            polymarket_api=MagicMock(),
+            mode='paper',
+        )
+        mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
+        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, False))
+        allowed, reason = svc.can_trade_live()
+        assert allowed is True
+        assert 'not in live mode' in reason
 
 
 # ---------------------------------------------------------------------------

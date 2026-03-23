@@ -14,6 +14,7 @@ from polyclaw.timeutils import utcnow
 
 if TYPE_CHECKING:
     from polyclaw.providers.ctf import PolymarketCTFProvider
+    from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
 
 
 class ExecutionService:
@@ -21,6 +22,8 @@ class ExecutionService:
         self.executor = PaperExecutionProvider()
         self._ctf_executor: PolymarketCTFProvider | None = None
         self._price_validator = PriceBandValidator()
+        self._ctf_provider: PolymarketCTFProvider | None = None
+        self._polymarket_api: PolymarketGammaProvider | None = None
 
     @property
     def ctf_executor(self) -> 'PolymarketCTFProvider':
@@ -45,6 +48,7 @@ class ExecutionService:
 
     def _process_real_decisions(self, session: Session) -> tuple[int, int]:
         """Process decisions with real order submission (paper or live)."""
+        self._check_live_trading_allowed(session)
         stmt = select(Decision, Market).join(Market, Decision.market_id_fk == Market.id).where(Decision.status == 'proposed')
         rows = session.execute(stmt).all()
         considered = len(rows)
@@ -176,3 +180,31 @@ class ExecutionService:
         session.commit()
         session.refresh(decision)
         return decision
+
+    def _check_live_trading_allowed(self, session: Session) -> None:
+        """Block live execution if reconciliation sources are unavailable."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if self._ctf_provider is None:
+            from polyclaw.providers.ctf import PolymarketCTFProvider
+            self._ctf_provider = PolymarketCTFProvider()
+        if self._polymarket_api is None:
+            from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
+            self._polymarket_api = PolymarketGammaProvider()
+
+        from polyclaw.reconciliation.service import ReconciliationService
+        try:
+            svc = ReconciliationService(
+                session=session,
+                ctf_provider=self._ctf_provider,
+                polymarket_api=self._polymarket_api,
+                mode='live',
+            )
+            allowed, reason = svc.can_trade_live()
+            if not allowed:
+                raise RuntimeError(f"Live trading blocked: {reason}")
+        except Exception as exc:
+            logger.error("Failed to check live trading eligibility: %s", exc)
+            raise RuntimeError("Live trading blocked: cannot verify position sources") from exc
