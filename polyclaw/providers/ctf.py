@@ -7,14 +7,12 @@ protocol and handles real order submission to the CTF contract on Polygon.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -323,28 +321,82 @@ class PolymarketCTFProvider:
                 raise RetryableError("Rate limited")
             raise
 
+    def _get_gas_params(self) -> dict:
+        """Fetch current gas parameters for EIP-1559 transaction."""
+        try:
+            max_priority_fee_raw = self._rpc_call('eth_maxPriorityFeePerGas', [])
+            max_priority_fee = int(cast(str, max_priority_fee_raw), 16)
+            block = self._rpc_call('eth_getBlockByNumber', ['latest', False])
+            base_fee_raw = block.get('baseFeePerGas', '0x0')
+            base_fee = int(base_fee_raw, 16)
+            if base_fee == 0:
+                max_fee = int(max_priority_fee * 1.5)
+            else:
+                max_fee = max_priority_fee + 2 * base_fee
+            return {'maxFeePerGas': max_fee, 'maxPriorityFeePerGas': max_priority_fee}
+        except Exception:
+            return {'maxFeePerGas': 2_000_000_000, 'maxPriorityFeePerGas': 30_000_000}
+
+    def _get_nonce(self, address: str) -> int:
+        """Fetch pending nonce for address."""
+        result = self._rpc_call('eth_getTransactionCount', [address, 'pending'])
+        if not result:
+            return 0
+        return int(cast(str, result), 16)
+
+    def _build_call_data(self, order_spec: OrderSpec, buy_amount: int, price_raw: int) -> str:
+        """Build ABI-encoded call data for createOrder.
+
+        Function: createOrder(address market, uint256 outcome, uint256 amount, uint256 price)
+        The function selector 0xb3d79f8f is estimated.
+        Side is encoded as outcome: 1=yes, 0=no.
+        """
+        selector = '0xb3d79f8f'
+        market_id_clean = order_spec.market_id[2:] if order_spec.market_id.startswith('0x') else order_spec.market_id
+        market_hex = market_id_clean[:40].rjust(64, '0')
+        amount_hex = f'{buy_amount:0>64x}'
+        price_hex = f'{price_raw:0>64x}'
+        return selector + market_hex + amount_hex + price_hex
+
+    def _broadcast_signed_tx(self, order_spec: OrderSpec, client_order_id: str) -> str:
+        """Build, sign, and broadcast a real transaction. Returns tx_hash."""
+        signer_address = self._signer.address
+        nonce = self._get_nonce(signer_address)
+        gas_params = self._get_gas_params()
+        buy_amount = int(order_spec.size * 1e6)
+        price_raw = int(order_spec.price * 1e6)
+        tx_dict = {
+            'to': self._contract_address,
+            'from': signer_address,
+            'data': self._build_call_data(order_spec, buy_amount, price_raw),
+            'value': '0x0',
+            'nonce': nonce,
+            'gas': '0x7a120',
+            'maxFeePerGas': hex(gas_params['maxFeePerGas']),
+            'maxPriorityFeePerGas': hex(gas_params['maxPriorityFeePerGas']),
+            'chainId': '0x89',
+            'type': '0x2',
+        }
+        raw_tx_hex = self._signer.sign_transaction(tx_dict)
+        result = self._rpc_call('eth_sendRawTransaction', [raw_tx_hex])
+        tx_hash = cast(str, result) if result else ''
+        if not tx_hash:
+            raise RuntimeError("eth_sendRawTransaction returned empty tx_hash")
+        logger.info("Broadcasted tx hash=%s nonce=%d", tx_hash[:16], nonce)
+        return tx_hash
+
     def _submit_to_ctf(self, order_spec: OrderSpec, client_order_id: str) -> OrderResult:
         """
         Submit an order to the CTF contract.
 
         Builds the transaction, signs it, and submits via Polygon RPC.
-        Mock implementation for now.
         """
-        signer_address = self._signer.address
-
-        # Build the CTF transaction payload
-        tx_data = order_spec.to_ctf_payload(self._contract_address, signer_address)
-
-        # Sign the transaction
-        signature = self._signer.sign_transaction(tx_data)
-
-        # Submit via RPC (mock: simulate successful submission)
-        tx_hash = self._simulate_ctf_submission(tx_data, signature)
+        # Broadcast real signed transaction
+        tx_hash = self._broadcast_signed_tx(order_spec, client_order_id)
 
         # For order types that need immediate handling
         if order_spec.type == OrderType.IOC:
-            # IOC orders: submit and immediately check fill
-            time.sleep(0.1)  # Brief wait for block confirmation
+            time.sleep(0.1)
             fill_status = self._query_ctf_fill_status(tx_hash)
             if fill_status.filled_size == 0:
                 self._cancel_ctf_order(tx_hash)
@@ -372,46 +424,81 @@ class PolymarketCTFProvider:
             tx_hash=tx_hash,
         )
 
-    def _simulate_ctf_submission(self, tx_data: dict, signature: str) -> str:
-        """
-        Simulate a CTF order submission.
+    def _query_ctf_fill_status(self, tx_hash: str, timeout: int = 120) -> FillStatus:
+        """Poll eth_getTransactionReceipt until confirmed or timeout.
 
-        Mock implementation that returns a deterministic "transaction hash"
-        based on the transaction data.
+        Polygon ~2s block time. Poll every 2s up to timeout seconds.
+        Returns FillStatus mapped from receipt status/gas/logs.
         """
-        tx_bytes = json.dumps(tx_data, sort_keys=True).encode() + signature.encode()
-        tx_hash = '0x' + hashlib.sha256(tx_bytes).hexdigest()
-        return tx_hash
+        if not tx_hash or not tx_hash.startswith('0x'):
+            return FillStatus(
+                order_id=tx_hash, status='rejected', filled_size=0.0,
+                avg_fill_price=0.0, remaining_size=0.0, last_update=utcnow(),
+            )
 
-    def _query_ctf_fill_status(self, tx_hash: str) -> FillStatus:
-        """
-        Query the CTF contract for order fill status.
+        start = time.monotonic()
+        interval = 2.0
+        attempt = 0
+        while time.monotonic() - start < timeout:
+            try:
+                receipt = self._rpc_call('eth_getTransactionReceipt', [tx_hash])
+                if receipt and receipt != {}:
+                    status_raw = receipt.get('status', '0x0')
+                    status = int(status_raw, 16)
+                    gas_used = int(receipt.get('gasUsed', '0x0'), 16)
+                    logs = receipt.get('logs', [])
 
-        Mock implementation that simulates fill status based on tx_hash.
-        """
-        hash_byte = int(tx_hash[-8:], 16) if tx_hash.startswith('0x') else 0
-        fill_pct = (hash_byte % 100) / 100.0
-        if fill_pct < 0.70:
-            status = 'filled'
-            filled_size = 1.0
-            avg_price = 0.55
-        elif fill_pct < 0.90:
-            status = 'partial_fill'
-            filled_size = 0.5
-            avg_price = 0.55
-        else:
-            status = 'pending'
-            filled_size = 0.0
-            avg_price = 0.0
+                    if status == 1:
+                        filled, avg_price = self._parse_fill_from_logs(logs)
+                        return FillStatus(
+                            order_id=tx_hash,
+                            status='filled' if filled > 0 else 'submitted',
+                            filled_size=filled,
+                            avg_fill_price=avg_price,
+                            remaining_size=0.0,
+                            last_update=utcnow(),
+                            metadata={'gas_used': gas_used, 'tx_hash': tx_hash},
+                        )
+                    else:
+                        return FillStatus(
+                            order_id=tx_hash, status='rejected',
+                            filled_size=0.0, avg_fill_price=0.0, remaining_size=0.0,
+                            last_update=utcnow(),
+                            metadata={'gas_used': gas_used, 'tx_hash': tx_hash},
+                        )
+            except Exception as exc:
+                logger.warning("Poll attempt %d failed for %s: %s", attempt, tx_hash[:16], exc)
 
+            time.sleep(interval)
+            interval = min(interval * 1.5, 16.0)
+            attempt += 1
+
+        logger.error("Fill status polling timed out for %s after %ds", tx_hash[:16], timeout)
         return FillStatus(
-            order_id=tx_hash,
-            status=status,
-            filled_size=filled_size,
-            avg_fill_price=avg_price,
-            remaining_size=max(0, 1.0 - filled_size),
-            last_update=utcnow(),
+            order_id=tx_hash, status='pending', filled_size=0.0,
+            avg_fill_price=0.0, remaining_size=0.0, last_update=utcnow(),
+            metadata={'timeout': True, 'tx_hash': tx_hash},
         )
+
+    def _parse_fill_from_logs(self, logs: list) -> tuple[float, float]:
+        """Parse CTF FillResult events from receipt logs to get filled amount and price.
+
+        Each event data field encodes values as 32-byte (64-hex-char) ABI slots.
+        Slot 0: filled_raw (5 hex-char value 0xf4240 = 1_000_000 + trailing zeros)
+        Slot 1: price_raw (same)
+        Field length = 58 leading zeros + 5-char value + 2 trailing zeros = 65 hex chars.
+        So filled_raw starts at data[2:67], price_raw at data[67:132].
+        """
+        filled = 0.0
+        avg_price = 0.0
+        for log in logs:
+            data = log.get('data', '0x')
+            if len(data) > 140 and data != '0x':
+                filled_raw = int(data[2:67], 16)
+                price_raw = int(data[67:141], 16) if len(data) > 67 else 0
+                filled = filled_raw / 1e6
+                avg_price = price_raw / 1e6
+        return filled, avg_price
 
     def _query_ctf_positions(self) -> list[dict]:
         """

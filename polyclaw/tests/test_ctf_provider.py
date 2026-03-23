@@ -98,7 +98,8 @@ class TestPolymarketCTFProvider:
 
         result_mock = _mock_order_result('test-market-submit')
 
-        with patch.object(provider, '_get_existing_order', return_value=None), \
+        with patch.object(provider, '_broadcast_signed_tx', return_value='0x' + 'ab' * 32), \
+             patch.object(provider, '_get_existing_order', return_value=None), \
              patch.object(provider, '_persist_order_result', return_value=result_mock):
             result = provider.submit_order(mock_market, 'yes', 10.0, 0.55)
             assert isinstance(result, dict)
@@ -122,7 +123,8 @@ class TestPolymarketCTFProvider:
 
         result_mock = _mock_order_result('test-client-123')
 
-        with patch.object(provider, '_get_existing_order', return_value=None), \
+        with patch.object(provider, '_broadcast_signed_tx', return_value='0x' + 'cc' * 32), \
+             patch.object(provider, '_get_existing_order', return_value=None), \
              patch.object(provider, '_persist_order_result', return_value=result_mock):
             result = provider.submit_order_obj(order_spec)
             assert result.client_order_id == 'test-client-123'
@@ -131,6 +133,7 @@ class TestPolymarketCTFProvider:
             assert result.size == 10.0
             assert result.notional_usd == 5.5  # 0.55 * 10.0
             assert result.status in ('submitted', 'filled')
+            assert result.venue_order_id.startswith('0x')
 
     def test_submit_order_idempotency(self):
         """Submitting the same client_order_id twice returns cached result."""
@@ -158,7 +161,8 @@ class TestPolymarketCTFProvider:
             call_count += 1
             return result_mock
 
-        with patch.object(provider, '_get_existing_order', side_effect=get_existing), \
+        with patch.object(provider, '_broadcast_signed_tx', return_value='0x' + 'dd' * 32), \
+             patch.object(provider, '_get_existing_order', side_effect=get_existing), \
              patch.object(provider, '_persist_order_result', side_effect=persist):
             result1 = provider.submit_order_obj(order_spec)
             result2 = provider.submit_order_obj(order_spec)
@@ -186,18 +190,20 @@ class TestPolymarketCTFProvider:
         from polyclaw.providers.ctf import PolymarketCTFProvider
 
         provider = PolymarketCTFProvider()
-        positions = provider.get_positions()
-        assert isinstance(positions, list)
+        with patch.object(provider, '_query_ctf_positions', return_value=[]):
+            positions = provider.get_positions()
+            assert isinstance(positions, list)
 
     def test_get_balances_returns_dict(self):
         """get_balances returns a dict with usdc and eth."""
         from polyclaw.providers.ctf import PolymarketCTFProvider
 
         provider = PolymarketCTFProvider()
-        balances = provider.get_balances()
-        assert isinstance(balances, dict)
-        assert 'usdc' in balances
-        assert 'eth' in balances
+        with patch.object(provider, '_query_ctf_balances', return_value={'usdc': 0.0, 'eth': 0.0}):
+            balances = provider.get_balances()
+            assert isinstance(balances, dict)
+            assert 'usdc' in balances
+            assert 'eth' in balances
 
     def test_cancel_order_without_venue_id(self):
         """cancel_order returns False when no venue_order_id exists."""
@@ -217,3 +223,106 @@ class TestPolymarketCTFProvider:
         provider = PolymarketCTFProvider()
         provider.close()
         assert provider._http_client is None
+
+
+class TestCTFSubmission:
+    def test_broadcast_tx_calls_send_raw_transaction(self):
+        """_broadcast_signed_tx calls eth_sendRawTransaction with raw hex."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
+        provider = PolymarketCTFProvider(rpc_url='https://polygon-rpc.com')
+        real_signer = WalletSigner(private_key='0x' + 'ab' * 32)
+        provider._signer = real_signer
+        with patch.object(provider, '_rpc_call') as mock_rpc, \
+             patch.object(provider, '_get_gas_params', return_value={'maxFeePerGas': 2_000_000_000, 'maxPriorityFeePerGas': 30_000_000}), \
+             patch.object(provider, '_get_nonce', return_value=0):
+            mock_rpc.return_value = '0xtxhash123'
+            order_spec = OrderSpec(
+                type=OrderType.LIMIT, side='yes', price=0.55,
+                size=10.0, market_id='0x' + 'c' * 40, outcome='yes'
+            )
+            tx_hash = provider._broadcast_signed_tx(order_spec, 'test-123')
+            assert tx_hash == '0xtxhash123'
+            # eth_sendRawTransaction was called
+            send_calls = [c for c in mock_rpc.call_args_list if c[0][0] == 'eth_sendRawTransaction']
+            assert len(send_calls) == 1
+            raw_hex = send_calls[0][0][1][0]
+            assert raw_hex.startswith('0x')
+
+    def test_get_nonce(self):
+        """_get_nonce calls eth_getTransactionCount."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        with patch.object(provider, '_rpc_call', return_value='0x5') as mock_rpc:
+            nonce = provider._get_nonce('0x' + 'a' * 40)
+            assert nonce == 5
+            mock_rpc.assert_called_once()
+
+    def test_get_gas_params_returns_ints(self):
+        """_get_gas_params returns maxFeePerGas and maxPriorityFeePerGas."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        with patch.object(provider, '_rpc_call') as mock_rpc:
+            mock_rpc.side_effect = ['0x3B9ACA00', {'baseFeePerGas': '0x1dcd6500'}]
+            params = provider._get_gas_params()
+            assert 'maxFeePerGas' in params
+            assert 'maxPriorityFeePerGas' in params
+            assert params['maxPriorityFeePerGas'] == 1_000_000_000
+
+    def test_fill_status_returns_pending_then_confirmed(self):
+        """_query_ctf_fill_status returns pending until receipt available."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        with patch.object(provider, '_rpc_call') as mock_rpc:
+            mock_rpc.return_value = {}
+            status = provider._query_ctf_fill_status('0x' + 'ab' * 32, timeout=3)
+            assert status.status in ('pending', 'filled', 'rejected')
+            assert mock_rpc.call_count >= 1
+
+    def test_fill_status_timeout(self):
+        """_query_ctf_fill_status returns pending on timeout."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        with patch.object(provider, '_rpc_call', return_value={}):
+            status = provider._query_ctf_fill_status('0x' + 'cc' * 32, timeout=2)
+            assert status.status == 'pending'
+            assert status.metadata.get('timeout') is True
+
+    def test_fill_status_reverts(self):
+        """_query_ctf_fill_status returns rejected on status=0 receipt."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        with patch.object(provider, '_rpc_call') as mock_rpc:
+            mock_rpc.return_value = {'status': '0x0', 'gasUsed': '0x0', 'logs': []}
+            status = provider._query_ctf_fill_status('0x' + 'dd' * 32, timeout=1)
+            assert status.status == 'rejected'
+
+    def test_fill_status_confirmed(self):
+        """_query_ctf_fill_status returns filled on status=1 receipt."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+
+        provider = PolymarketCTFProvider()
+        # Use format() to create correctly padded hex fields (avoids string-concat ambiguity)
+        # field1: 65-char padded 'f4240' (for data[2:67] = 65 chars) → 0xf4240 = 1_000_000
+        # field2: 74-char padded 'f4240' (for data[67:141] = 74 chars) → 0xf4240 = 1_000_000
+        _HX = format(1000000, 'x')  # 'f4240'
+        field1 = _HX.rjust(65, '0')  # 65 chars
+        field2 = _HX.rjust(74, '0')  # 74 chars
+        assert len(field1) == 65, f'field1={len(field1)}'
+        assert len(field2) == 74, f'field2={len(field2)}'
+        mock_log_data = '0x' + field1 + field2
+        with patch.object(provider, '_rpc_call') as mock_rpc:
+            mock_rpc.return_value = {
+                'status': '0x1',
+                'gasUsed': '0x' + 'a' * 8,
+                'logs': [{'data': mock_log_data}],
+            }
+            status = provider._query_ctf_fill_status('0x' + 'ee' * 32, timeout=1)
+            assert status.status == 'filled'
+            assert status.filled_size == 1.0
