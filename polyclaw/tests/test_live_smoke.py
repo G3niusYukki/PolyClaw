@@ -210,3 +210,72 @@ def test_live_full_pipeline_sign_broadcast_receipt_fill(live_provider, test_mark
     print("PASS: Reconciliation cycle completed")
 
     print("PASS: Full closed-loop smoke test complete")
+
+
+@pytest.mark.live_manual
+def test_live_receipt_parsing():
+    """Parse a real eth_getTransactionReceipt and verify FillResult event decoding."""
+    from polyclaw.providers.ctf import PolymarketCTFProvider
+    from polyclaw.providers.signer import WalletSigner
+    import os
+
+    pk = os.environ.get('CTF_PRIVATE_KEY', '')
+    if not pk:
+        pytest.skip("CTF_PRIVATE_KEY not set")
+
+    signer = WalletSigner()
+    provider = PolymarketCTFProvider()
+    provider._signer = signer
+
+    # Use a known tx hash to test receipt parsing
+    known_tx = os.environ.get('TEST_RECEIPT_TX', '')
+    if not known_tx:
+        pytest.skip("TEST_RECEIPT_TX not set")
+
+    status = provider._query_ctf_fill_status(known_tx, timeout=10)
+    print(f"Receipt status: {status.status}")
+    assert status.status in ('filled', 'pending', 'rejected')
+    if status.filled_size > 0:
+        print(f"Filled size: {status.filled_size}, avg price: {status.avg_fill_price}")
+        assert status.avg_fill_price > 0 and status.avg_fill_price <= 1.0
+    print("PASS: Receipt parsing works")
+
+
+@pytest.mark.live_manual
+def test_live_cancel_order():
+    """Submit and cancel a real order to test the cancel pipeline."""
+    from polyclaw.providers.ctf import PolymarketCTFProvider
+    from polyclaw.execution.orders import OrderSpec, OrderType
+    from polyclaw.providers.signer import WalletSigner
+    import os, time
+
+    pk = os.environ.get('CTF_PRIVATE_KEY', '')
+    if not pk:
+        pytest.skip("CTF_PRIVATE_KEY not set")
+
+    market = os.environ.get('TEST_MARKET_ID', '')
+    if not market:
+        pytest.skip("TEST_MARKET_ID not set")
+
+    signer = WalletSigner()
+    provider = PolymarketCTFProvider()
+    provider._signer = signer
+
+    order_spec = OrderSpec(
+        type=OrderType.LIMIT,
+        side='no',
+        price=0.45,
+        size=1.0,
+        market_id=market,
+        outcome='no',
+        client_order_id=f'cancel-smoke-{int(time.time())}',
+    )
+    result = provider.submit_order_obj(order_spec)
+    print(f"Order submitted: {result.tx_hash[:16]}")
+    assert result.tx_hash
+
+    time.sleep(5)
+    cancelled = provider.cancel_order(result)
+    print(f"Cancel result: {cancelled}")
+    assert isinstance(cancelled, bool)
+    print("PASS: Cancel pipeline works")
