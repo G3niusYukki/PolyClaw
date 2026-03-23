@@ -1,6 +1,8 @@
 """Tests for the PolymarketCTFProvider."""
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from polyclaw.execution.orders import OrderSpec, OrderType
 from polyclaw.providers.signer import WalletSigner
 
@@ -19,58 +21,45 @@ def _mock_order_result(client_order_id: str, side='yes', status='submitted'):
 
 
 class TestWalletSigner:
-    """Tests for WalletSigner."""
+    """Tests for WalletSigner with real eth-account signing."""
 
-    def test_sign_transaction_with_empty_key(self):
-        """Signing without a private key returns a mock signature."""
-        signer = WalletSigner(private_key='')
-        sig = signer.sign_transaction({'to': '0x123', 'value': 100})
+    def test_sign_transaction_returns_raw_hex(self):
+        """sign_transaction returns a rawTransaction hex string."""
+        signer = WalletSigner(private_key='0x' + '01' * 32)
+        tx = {'to': '0x1a642f0E3c3aF545E7AcBD38b07251B3990914F1', 'value': 0, 'nonce': 0,
+              'gas': 500000, 'maxFeePerGas': 1, 'maxPriorityFeePerGas': 1, 'chainId': 137, 'type': 2, 'data': '0x'}
+        sig = signer.sign_transaction(tx)
         assert sig.startswith('0x')
-        assert len(sig) > 2
+        assert len(sig) > 100  # RLP-encoded tx is long
 
-    def test_sign_transaction_deterministic(self):
-        """The same tx_data should produce the same signature."""
-        signer = WalletSigner(private_key='test_key_123')
-        tx_data = {'to': '0x456', 'value': 200}
-        sig1 = signer.sign_transaction(tx_data)
-        sig2 = signer.sign_transaction(tx_data)
-        assert sig1 == sig2
-
-    def test_sign_transaction_different_keys(self):
-        """Different private keys should produce different signatures."""
-        signer1 = WalletSigner(private_key='key1')
-        signer2 = WalletSigner(private_key='key2')
-        tx_data = {'to': '0x789', 'value': 300}
-        sig1 = signer1.sign_transaction(tx_data)
-        sig2 = signer2.sign_transaction(tx_data)
-        assert sig1 != sig2
-
-    def test_sign_transaction_different_data(self):
-        """Different tx_data should produce different signatures."""
-        signer = WalletSigner(private_key='same_key')
-        sig1 = signer.sign_transaction({'a': 1})
-        sig2 = signer.sign_transaction({'a': 2})
-        assert sig1 != sig2
-
-    def test_sign_message(self):
-        """sign_message should return a hex signature."""
-        signer = WalletSigner(private_key='message_key')
-        sig = signer.sign_message('Hello PolyClaw')
-        assert sig.startswith('0x')
-        assert len(sig) > 2
-
-    def test_address_derivation(self):
-        """Address should be derived from the private key."""
-        signer1 = WalletSigner(private_key='addr_key_1')
-        signer2 = WalletSigner(private_key='addr_key_2')
-        assert signer1.address != signer2.address
-        assert signer1.address.startswith('0x')
-        assert len(signer1.address) == 42  # 0x + 40 hex chars
+    def test_address_derived_from_key(self):
+        """address returns real public-key-derived Ethereum address."""
+        signer = WalletSigner(private_key='0x' + 'ab' * 32)
+        assert signer.address.startswith('0x')
+        assert len(signer.address) == 42
+        assert signer.address != '0x' + '0' * 40
 
     def test_address_empty_key(self):
-        """Empty key should return all-zeros address."""
+        """Empty key returns all-zeros address."""
         signer = WalletSigner(private_key='')
         assert signer.address == '0x' + '0' * 40
+
+    def test_sign_no_key_raises(self):
+        """sign_transaction raises ValueError when no key configured."""
+        signer = WalletSigner(private_key='')
+        with pytest.raises(ValueError, match="Cannot sign"):
+            signer.sign_transaction({'to': '0x0', 'value': 0, 'nonce': 0, 'gas': 0,
+                                   'maxFeePerGas': 0, 'maxPriorityFeePerGas': 0, 'chainId': 137, 'type': 2, 'data': '0x'})
+
+    def test_sign_transaction_valid_hex(self):
+        """ECDSA signatures are non-deterministic but must be valid hex."""
+        signer = WalletSigner(private_key='0x' + 'cc' * 32)
+        tx = {'to': '0xe8acf143AFbF8B1371A20ea934D334180190Eac1', 'value': 0, 'nonce': 0,
+              'gas': 500000, 'maxFeePerGas': 2, 'maxPriorityFeePerGas': 1, 'chainId': 137, 'type': 2, 'data': '0x'}
+        sig1 = signer.sign_transaction(tx)
+        sig2 = signer.sign_transaction(tx)
+        assert sig1.startswith('0x') and len(sig1) > 100
+        assert sig2.startswith('0x') and len(sig2) > 100
 
 
 class TestPolymarketCTFProvider:

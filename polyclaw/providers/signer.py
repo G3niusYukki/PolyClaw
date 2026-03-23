@@ -1,97 +1,83 @@
-"""Wallet signing utilities for CTF transactions.
-
-Provides a WalletSigner class that signs blockchain transactions using
-a private key from AWS Secrets Manager or an environment variable.
-"""
+"""Wallet signing utilities for CTF transactions."""
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
+from eth_account import Account
+
+from polyclaw.config import settings
 from polyclaw.secrets import secrets_manager
 
 
 class WalletSigner:
-    """
-    Signs blockchain transactions using a private key.
-
-    Supports retrieval from AWS Secrets Manager with fallback to environment variable.
-    Currently returns a mock signature; real implementation would use eth_keys or web3.
-    """
+    """Signs blockchain transactions using a private key via eth-account secp256k1."""
 
     def __init__(self, private_key: str | None = None):
-        """
-        Initialize the signer.
-
-        Args:
-            private_key: Optional private key override. If not provided, retrieves
-                from AWS Secrets Manager or CTF_PRIVATE_KEY environment variable.
-        """
         if private_key:
             self._private_key = private_key
         else:
             self._private_key = secrets_manager.get_ctf_private_key()
-
-    def sign_transaction(self, tx_data: dict[str, Any]) -> str:
-        """
-        Sign a transaction and return the hex signature.
-
-        Args:
-            tx_data: A dictionary containing transaction data (to, value, data, etc.).
-
-        Returns:
-            The hex-encoded signature string.
-
-        Note:
-            This is a mock implementation. Real implementation would:
-            1. Serialize tx_data into a transaction hash
-            2. Sign with ECDSA using the private key
-            3. Return the signature (r, s, v components)
-        """
-        if not self._private_key:
-            # Return a mock signature for testing/development
-            return '0xmock_signature_' + hashlib.sha256(
-                str(tx_data).encode()
-            ).hexdigest()[:64]
-
-        # Mock: compute a deterministic "signature" from tx_data and private key
-        # In production, use eth_keys.PrivateKey or web3.eth.account
-        tx_bytes = str(tx_data).encode() + self._private_key.encode()
-        sig = hashlib.sha256(tx_bytes).hexdigest()
-        return '0x' + sig
-
-    def sign_message(self, message: str) -> str:
-        """
-        Sign a message string.
-
-        Args:
-            message: The message to sign.
-
-        Returns:
-            The hex-encoded signature.
-        """
-        if not self._private_key:
-            return '0xmock_sig_' + hashlib.sha256(message.encode()).hexdigest()[:64]
-        msg_bytes = message.encode() + self._private_key.encode()
-        sig = hashlib.sha256(msg_bytes).hexdigest()
-        return '0x' + sig
+        self._account = None
+        if self._private_key:
+            try:
+                # eth-account accepts keys with or without 0x prefix
+                normalized = self._private_key
+                if not normalized.startswith('0x'):
+                    normalized = '0x' + normalized
+                self._account = Account.from_key(normalized)
+            except Exception:
+                self._account = None
+        # Startup validation: fail if live_trading_enabled but no valid key
+        if settings.live_trading_enabled and not self._private_key:
+            raise ValueError("CTF_PRIVATE_KEY is required when live_trading_enabled=true. Refusing to start in mock mode.")
+        if self._account is None and self._private_key:
+            raise ValueError(f"Invalid private key format: {self._private_key[:20]}...")
 
     @property
     def address(self) -> str:
-        """
-        Derive the Ethereum address from the private key.
+        """Return the Ethereum address derived from the private key."""
+        if self._account:
+            return self._account.address
+        return "0x" + "0" * 40
 
-        Returns:
-            The address as a 0x-prefixed hex string (mock).
+    def sign_transaction(self, tx_data: dict) -> str:
+        """Sign a transaction. Returns rawTransaction.hex() for eth_sendRawTransaction."""
+        if not self._account:
+            raise ValueError("Cannot sign: no private key configured")
+        signable = self._build_signable_tx(tx_data)
+        signed = self._account.sign_transaction(signable)
+        return '0x' + signed.raw_transaction.hex()
 
-        Note:
-            Mock returns a deterministic address derived from the private key.
-            Real implementation would use eth_keys or web3.
-        """
-        if not self._private_key:
-            return '0x' + '0' * 40
-        key_hash = hashlib.sha256(self._private_key.encode()).hexdigest()
-        return '0x' + key_hash[-40:]
+    def _build_signable_tx(self, tx_data: dict) -> dict:
+        """Convert raw tx_data dict to eth-account signable format (EIP-1559)."""
+        raw_value = tx_data.get('value', 0)
+        if isinstance(raw_value, str) and raw_value.startswith('0x'):
+            value = int(raw_value, 16)
+        else:
+            value = raw_value or 0
+        signable = {
+            'to': tx_data['to'],
+            'data': tx_data.get('data', '0x'),
+            'value': value,
+            'nonce': tx_data.get('nonce', 0),
+            'gas': tx_data.get('gas', 500000),
+            'maxFeePerGas': tx_data.get('maxFeePerGas', 0),
+            'maxPriorityFeePerGas': tx_data.get('maxPriorityFeePerGas', 0),
+            'chainId': tx_data.get('chainId', 137),
+            'type': 2,
+        }
+        # Only include 'from' if explicitly provided and matches the signing key
+        tx_from = tx_data.get('from')
+        if tx_from and self._account and tx_from.lower() == self._account.address.lower():
+            signable['from'] = tx_from
+        return signable
+
+    def sign_message(self, message: str) -> str:
+        """Sign a message string. Returns hex signature."""
+        if not self._account:
+            raise ValueError("Cannot sign: no private key configured")
+        signed = self._account.sign_message(message)
+        return signed.signature.hex()
 
 
 # Module-level singleton
