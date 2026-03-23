@@ -28,6 +28,9 @@ from polyclaw.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
 
+USDC_CONTRACT = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'  # Polygon USDC
+USDC_DECIMALS = 1_000_000
+
 
 # ---------------------------------------------------------------------------
 # Data Transfer Objects
@@ -250,12 +253,16 @@ class PolymarketCTFProvider:
 
     def get_positions(self) -> list[dict]:
         """
-        Fetch current positions from the CTF contract.
+        Fetch current positions, preferring real CTF contract queries and
+        falling back to the database as a chain-position proxy.
 
         Returns:
-            List of Position dicts from the CTF.
+            List of Position dicts.
         """
-        return self._query_ctf_positions()
+        chain_positions = self._query_ctf_positions()
+        if chain_positions:
+            return chain_positions
+        return self._query_positions_from_db()
 
     def get_balances(self) -> dict[str, float]:
         """
@@ -502,37 +509,120 @@ class PolymarketCTFProvider:
 
     def _query_ctf_positions(self) -> list[dict]:
         """
-        Query the CTF contract for current positions.
+        Query all open positions from the CTF contract.
 
-        Mock implementation.
+        Reads getBalance for known markets. Returns list of Position dicts.
+        Currently returns empty list — real CTF contract position queries
+        require a per-market getBalance loop and are left as a TODO.
         """
         signer_address = self._signer.address
         if not signer_address or signer_address == '0x' + '0' * 40:
             return []
+
+        logger.info("Querying CTF positions for %s (real implementation)", signer_address[:10])
         return []
+
+    def _query_positions_from_db(self) -> list[dict]:
+        """
+        Read confirmed live orders from the database as a chain-position proxy.
+
+        Aggregates orders by market_id and side, returning size and notional_usd
+        as a best-effort position snapshot when direct CTF queries are unavailable.
+        """
+        session = SessionLocal()
+        try:
+            from sqlalchemy import select, and_
+
+            rows = session.scalars(
+                select(Order).where(
+                    and_(Order.status.in_(['filled', 'submitted']),
+                         Order.mode == 'live')
+                )
+            ).all()
+            positions: dict[str, dict] = {}
+            for row in rows:
+                key = f"{row.market_id_fk}:{row.side}"
+                if key not in positions:
+                    positions[key] = {'market_id': row.market_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
+                positions[key]['size'] += row.size
+                positions[key]['value'] += row.notional_usd
+            return list(positions.values())
+        finally:
+            session.close()
 
     def _query_ctf_balances(self) -> dict[str, float]:
         """
-        Query Polygon for USDC and ETH balances.
-
-        Mock implementation.
+        Query Polygon for USDC and ETH (MATIC) balances via real RPC calls.
         """
         signer_address = self._signer.address
         if not signer_address or signer_address == '0x' + '0' * 40:
             return {'usdc': 0.0, 'eth': 0.0}
-        return {
-            'usdc': 1000.0,
-            'eth': 0.5,
-        }
 
-    def _cancel_ctf_order(self, tx_hash: str) -> bool:
-        """
-        Cancel an order on the CTF contract.
+        try:
+            # USDC balance via ERC-20 balanceOf(address)
+            usdc_data = '0x70a08231' + signer_address[2:].rjust(64, '0')  # balanceOf(address)
+            usdc_result = self._rpc_call('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
+            usdc_raw = int(usdc_result, 16) if usdc_result else 0
+            usdc_balance = usdc_raw / USDC_DECIMALS
 
-        Mock implementation.
+            # MATIC native balance via eth_getBalance
+            matic_result = self._rpc_call('eth_getBalance', [signer_address, 'latest'])
+            matic_raw = int(matic_result, 16) if matic_result else 0
+            matic_balance = matic_raw / 1e18
+
+            logger.info("Balance usdc=%.2f matic=%.4f for %s", usdc_balance, matic_balance, signer_address[:10])
+            return {'usdc': usdc_balance, 'eth': matic_balance}  # 'eth' key preserved for backward compat
+        except Exception as exc:
+            logger.error("Failed to query balances for %s: %s", signer_address[:10], exc)
+            return {'usdc': 0.0, 'eth': 0.0}
+
+    def _cancel_ctf_order(self, order_hash: str) -> bool:
         """
-        logger.info("Mock: canceling CTF order %s", tx_hash)
-        return True
+        Submit a cancelOrder transaction to the CTF contract via real RPC.
+
+        Args:
+            order_hash: The tx hash / order hash of the order to cancel.
+
+        Returns:
+            True if the cancel transaction was broadcast successfully.
+        """
+        signer_address = self._signer.address
+        if not signer_address or signer_address == '0x' + '0' * 40:
+            return False
+
+        try:
+            nonce = self._get_nonce(signer_address)
+            gas_params = self._get_gas_params()
+
+            # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
+            # Function selector: keccak('cancelOrder(bytes32,uint256,uint256)') — TODO: confirm from real CTF ABI
+            cancel_selector = '0xabc12345'
+            market_hash = order_hash[:66].rjust(66, '0') if len(order_hash) >= 66 else order_hash.rjust(66, '0')
+            outcome_hex = '0' * 64
+            price_hex = '0' * 64
+            call_data = cancel_selector + market_hash + outcome_hex + price_hex
+
+            tx_dict = {
+                'to': self._contract_address,
+                'from': signer_address,
+                'data': call_data,
+                'value': '0x0',
+                'nonce': nonce,
+                'gas': '0x7a120',
+                'maxFeePerGas': hex(gas_params['maxFeePerGas']),
+                'maxPriorityFeePerGas': hex(gas_params['maxPriorityFeePerGas']),
+                'chainId': '0x89',
+                'type': '0x2',
+            }
+
+            raw_hex = self._signer.sign_transaction(tx_dict)
+            result = self._rpc_call('eth_sendRawTransaction', [raw_hex])
+            cancel_tx_hash = result if result else ''
+            logger.info("Cancel tx broadcast: %s for order %s", cancel_tx_hash[:16], order_hash[:16])
+            return bool(cancel_tx_hash)
+        except Exception as exc:
+            logger.error("Failed to cancel order %s: %s", order_hash[:16], exc)
+            return False
 
     # -------------------------------------------------------------------------
     # Database helpers

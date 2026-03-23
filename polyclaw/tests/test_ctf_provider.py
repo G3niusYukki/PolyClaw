@@ -326,3 +326,45 @@ class TestCTFSubmission:
             status = provider._query_ctf_fill_status('0x' + 'ee' * 32, timeout=1)
             assert status.status == 'filled'
             assert status.filled_size == 1.0
+
+
+class TestBalanceAndCancel:
+    """Tests for real balance queries, cancel broadcast, and DB fallback positions."""
+
+    def test_balances_returns_real_values(self):
+        """_query_ctf_balances calls eth_getBalance and eth_call."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        provider = PolymarketCTFProvider()
+        real_signer = WalletSigner(private_key='0x' + 'dd' * 32)
+        provider._signer = real_signer
+        with patch.object(provider, '_rpc_call') as mock_rpc:
+            # eth_getBalance returns 0 MATIC, eth_call returns 0 USDC
+            mock_rpc.side_effect = ['0x' + '0' * 64, '0x' + '0' * 64]
+            balances = provider._query_ctf_balances()
+            assert 'usdc' in balances
+            assert 'eth' in balances
+            assert balances['usdc'] == 0.0
+            assert balances['eth'] == 0.0
+
+    def test_balances_zero_address(self):
+        """Empty signer returns zero balances."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        provider = PolymarketCTFProvider()
+        signer = WalletSigner(private_key='')
+        provider._signer = signer
+        balances = provider._query_ctf_balances()
+        assert balances['usdc'] == 0.0
+        assert balances['eth'] == 0.0
+
+    def test_cancel_calls_broadcast(self):
+        """_cancel_ctf_order calls eth_sendRawTransaction."""
+        from polyclaw.providers.ctf import PolymarketCTFProvider
+        provider = PolymarketCTFProvider()
+        real_signer = WalletSigner(private_key='0x' + 'ee' * 32)
+        provider._signer = real_signer
+        with patch.object(provider, '_rpc_call') as mock_rpc, \
+             patch.object(provider, '_get_gas_params', return_value={'maxFeePerGas': 2e9, 'maxPriorityFeePerGas': 3e7}), \
+             patch.object(provider, '_get_nonce', return_value=0):
+            mock_rpc.return_value = '0x' + 'f' * 64
+            result = provider._cancel_ctf_order('0x' + 'aabbcc' * 11)
+            assert result is True
