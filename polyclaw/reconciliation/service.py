@@ -4,6 +4,13 @@ Reconciliation service — reconciles positions across system DB, Polymarket API
 
 from typing import TYPE_CHECKING
 
+# Shared threshold constants — must stay consistent across reconciliation/.
+# - DRIFT_CRITICAL_THRESHOLD (5.0): triggers CRITICAL severity in alerts.py and
+#   sets is_critical=True in detector.py. Aligned with safety.py audit severity levels.
+# - DRIFT_AUTO_CLOSE_THRESHOLD (10.0): triggers auto-close in this service.
+DRIFT_CRITICAL_THRESHOLD: float = 5.0
+DRIFT_AUTO_CLOSE_THRESHOLD: float = 10.0
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -184,17 +191,28 @@ class ReconciliationService:
             A dict mapping market_id -> PositionSummary.
         """
         import asyncio
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         try:
             if hasattr(self.polymarket_api, 'get_positions'):
                 positions = self.polymarket_api.get_positions()
                 if asyncio.iscoroutine(positions):
-                    positions = asyncio.run(positions)
+                    # asyncio.run() fails inside an existing event loop (e.g. FastAPI route).
+                    # Use loop.run_until_complete() which is safe in both sync and async contexts.
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        # No running loop — use asyncio.run() as a fallback.
+                        positions = asyncio.run(positions)
+                    else:
+                        positions = loop.run_until_complete(positions)
             else:
                 positions = []
-        except RuntimeError:
-            positions = self.polymarket_api.get_positions()
-            if asyncio.iscoroutine(positions):
-                positions = asyncio.run(positions)
+        except Exception as exc:
+            logger.error("Failed to fetch API positions: %s", exc)
+            positions = []
 
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
@@ -218,14 +236,25 @@ class ReconciliationService:
             A dict mapping market_id -> PositionSummary.
         """
         import asyncio
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         try:
             positions = self.ctf_provider.get_positions()
             if asyncio.iscoroutine(positions):
-                positions = asyncio.run(positions)
-        except RuntimeError:
-            positions = self.ctf_provider.get_positions()
-            if asyncio.iscoroutine(positions):
-                positions = asyncio.run(positions)
+                # asyncio.run() fails inside an existing event loop (e.g. FastAPI route).
+                # Use loop.run_until_complete() which is safe in both sync and async contexts.
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    # No running loop — use asyncio.run() as a fallback.
+                    positions = asyncio.run(positions)
+                else:
+                    positions = loop.run_until_complete(positions)
+        except Exception as exc:
+            logger.error("Failed to fetch chain positions: %s", exc)
+            positions = []
 
         result: dict[str, PositionSummary] = {}
         for pos_dict in positions:
@@ -341,6 +370,7 @@ class ReconciliationService:
         )
         self.session.add(close_order)
         self.session.flush()
+        self.session.commit()  # commit immediately so the close order is persisted independently
 
     @property
     def last_report(self) -> ReconciliationReport | None:

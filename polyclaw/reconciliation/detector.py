@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from polyclaw.reconciliation.types import PositionSummary
+from polyclaw.reconciliation.service import DRIFT_CRITICAL_THRESHOLD
 
 
 class DiscrepancyCategory(str, Enum):
@@ -43,9 +44,8 @@ class DiscrepancyDetector:
 
     Comparison is done across all three sources pairwise. The `tolerance`
     parameter controls the floating-point comparison threshold (default $0.01).
+    Uses DRIFT_CRITICAL_THRESHOLD from service.py for the is_critical flag.
     """
-
-    CRITICAL_THRESHOLD: float = 5.0
 
     def __init__(self, tolerance: float = 0.01):
         """
@@ -100,7 +100,7 @@ class DiscrepancyDetector:
         return DetectionResult(
             discrepancies=discrepancies,
             total_drift_usd=total_drift,
-            is_critical=total_drift > self.CRITICAL_THRESHOLD,
+            is_critical=total_drift > DRIFT_CRITICAL_THRESHOLD,
         )
 
     def _compare_pair(
