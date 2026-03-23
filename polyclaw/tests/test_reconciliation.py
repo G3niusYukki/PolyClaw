@@ -331,7 +331,7 @@ class TestReconciliationService:
         assert positions['m1'].notional_usd == 5.5
         svc.ctf_provider.get_positions.assert_called_once()
 
-    def test_can_trade_live_blocks_when_api_unavailable(self, mocker):
+    def test_can_trade_live_blocks_when_api_unavailable(self):
         """can_trade_live returns False when API positions unavailable."""
         from polyclaw.reconciliation.service import ReconciliationService
         svc = ReconciliationService(
@@ -340,13 +340,13 @@ class TestReconciliationService:
             polymarket_api=MagicMock(),
             mode='live',
         )
-        mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
-        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, True))
-        allowed, reason = svc.can_trade_live()
+        with patch.object(svc, 'get_api_positions', return_value=({}, False)):
+            with patch.object(svc, 'get_chain_positions', return_value=({}, True)):
+                allowed, reason = svc.can_trade_live()
         assert allowed is False
         assert 'API positions unavailable' in reason
 
-    def test_can_trade_live_blocks_when_chain_unavailable(self, mocker):
+    def test_can_trade_live_blocks_when_chain_unavailable(self):
         """can_trade_live returns False when chain positions unavailable."""
         from polyclaw.reconciliation.service import ReconciliationService
         svc = ReconciliationService(
@@ -355,13 +355,13 @@ class TestReconciliationService:
             polymarket_api=MagicMock(),
             mode='live',
         )
-        mocker.patch.object(svc, 'get_api_positions', return_value=({}, True))
-        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, False))
-        allowed, reason = svc.can_trade_live()
+        with patch.object(svc, 'get_api_positions', return_value=({}, True)):
+            with patch.object(svc, 'get_chain_positions', return_value=({}, False)):
+                allowed, reason = svc.can_trade_live()
         assert allowed is False
         assert 'chain positions unavailable' in reason
 
-    def test_can_trade_live_allows_paper_mode(self, mocker):
+    def test_can_trade_live_allows_paper_mode(self):
         """can_trade_live allows when mode is paper (no gating)."""
         from polyclaw.reconciliation.service import ReconciliationService
         svc = ReconciliationService(
@@ -370,9 +370,9 @@ class TestReconciliationService:
             polymarket_api=MagicMock(),
             mode='paper',
         )
-        mocker.patch.object(svc, 'get_api_positions', return_value=({}, False))
-        mocker.patch.object(svc, 'get_chain_positions', return_value=({}, False))
-        allowed, reason = svc.can_trade_live()
+        with patch.object(svc, 'get_api_positions', return_value=({}, False)):
+            with patch.object(svc, 'get_chain_positions', return_value=({}, False)):
+                allowed, reason = svc.can_trade_live()
         assert allowed is True
         assert 'not in live mode' in reason
 
