@@ -352,6 +352,7 @@ class CTFLiveCircuitBreaker:
 
     def record_send_failure(self) -> None:
         self._send_failures += 1
+        logger.warning("CTF send failure %d/%d", self._send_failures, self.max_consecutive_send_failures)
         if self._send_failures >= self.max_consecutive_send_failures:
             self._trigger_kill_switch(
                 f"ctf_send_failure: {self._send_failures} consecutive failures"
@@ -365,6 +366,8 @@ class CTFLiveCircuitBreaker:
         self._rpc_errors.append(now)
         cutoff = now - self.error_window_seconds
         self._rpc_errors = [t for t in self._rpc_errors if t > cutoff]
+        logger.warning("CTF RPC error %d/%d (window=%ds)",
+            len(self._rpc_errors), self.max_rpc_errors, self.error_window_seconds)
         if len(self._rpc_errors) >= self.max_rpc_errors:
             self._trigger_kill_switch(
                 f"ctf_rpc_errors: {len(self._rpc_errors)} in {self.error_window_seconds}s"

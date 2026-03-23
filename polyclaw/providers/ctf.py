@@ -345,9 +345,9 @@ class PolymarketCTFProvider:
     def _get_gas_params(self) -> dict:
         """Fetch current gas parameters for EIP-1559 transaction."""
         try:
-            max_priority_fee_raw = self._rpc_call('eth_maxPriorityFeePerGas', [])
+            max_priority_fee_raw = self._rpc_call_with_error_tracking('eth_maxPriorityFeePerGas', [])
             max_priority_fee = int(cast(str, max_priority_fee_raw), 16)
-            block = self._rpc_call('eth_getBlockByNumber', ['latest', False])
+            block = self._rpc_call_with_error_tracking('eth_getBlockByNumber', ['latest', False])
             base_fee_raw = block.get('baseFeePerGas', '0x0')
             base_fee = int(base_fee_raw, 16)
             if base_fee == 0:
@@ -360,7 +360,7 @@ class PolymarketCTFProvider:
 
     def _get_nonce(self, address: str) -> int:
         """Fetch pending nonce for address."""
-        result = self._rpc_call('eth_getTransactionCount', [address, 'pending'])
+        result = self._rpc_call_with_error_tracking('eth_getTransactionCount', [address, 'pending'])
         if not result:
             return 0
         return int(cast(str, result), 16)
