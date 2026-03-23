@@ -60,3 +60,6 @@ include = ["polyclaw*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-q"
+markers = [
+    "live_manual: marks tests that require real CTF private key and RPC (run manually only, not in CI)",
+]
