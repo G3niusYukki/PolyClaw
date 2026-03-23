@@ -592,7 +592,9 @@ class PolymarketCTFProvider:
     def _fetch_active_markets(self) -> list[str]:
         """Fetch active market addresses from Polymarket API.
 
-        Note: PolymarketGammaProvider.get_positions() is synchronous — call directly.
+        This method relies solely on settings.polymarket_positions_url.
+        No polymarket_api attribute exists on PolymarketCTFProvider — that
+        fallback path was removed as dead code.
         """
         try:
             markets_url = getattr(settings, 'polymarket_positions_url', None)
@@ -601,10 +603,6 @@ class PolymarketCTFProvider:
                 resp.raise_for_status()
                 data = resp.json()
                 return [m['address'] for m in data if m.get('address')]
-            # Fallback: extract unique market IDs from existing positions
-            if hasattr(self.polymarket_api, 'get_positions'):
-                positions = self.polymarket_api.get_positions()
-                return list({p.get('market_id', '') for p in positions if p.get('market_id')})
             return []
         except Exception as exc:
             logger.error("Failed to fetch active markets: %s", exc)
