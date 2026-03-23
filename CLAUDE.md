@@ -24,8 +24,11 @@ polyclaw tick
 # Run backtest with walk-forward validation
 polyclaw backtest --strategy event_catalyst
 
-# Run all tests
+# Run all tests (skip live-only tests)
 pytest
+
+# Run tests including live smoke tests (requires CTF_PRIVATE_KEY env var)
+pytest -m live_manual
 
 # Run tests with coverage
 pytest --cov=polyclaw --cov-report=term-missing
@@ -46,6 +49,7 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 | Module | Purpose |
 |--------|---------|
 | `polyclaw/providers/` | Pluggable provider interfaces (MarketProvider, EvidenceProvider, ExecutionProvider) |
+| `polyclaw/providers/prerequisites.py` | `LiveTradingPrerequisites` — validates RPC, selectors, contract address, balances before enabling live mode |
 | `polyclaw/services/analysis.py` | Orchestrates scanning, ranking, evidence, strategies, and risk |
 | `polyclaw/services/runner.py` | Orchestrates full tick cycle (scan + execute-ready) |
 | `polyclaw/services/execution.py` | Handles order approval and execution dispatch |
@@ -124,6 +128,8 @@ The system has multiple safety layers. All default to conservative values:
 - `StrategyCircuitBreaker` — triggers on strategy DD >10%, auto-resets after 24h + manual review
 - `PriceBandValidator` — rejects orders >2% deviation from reference price
 - Risk engine rejects trades on stale data, low liquidity, excessive spread, exposure overflow
+- `LiveTradingPrerequisites` — validates RPC (`eth_blockNumber`), CTF selectors (`createOrder=0x6f652e1a`, `cancelOrder=0x0fdb031d`), contract address, and balances before enabling live mode; raises `PrerequisiteError` on failure
+- Reconciliation `can_trade_live()` — blocks live trading when Polymarket API or CTF chain positions are unavailable; guarded by `execution_mode != 'live'`
 - `MarketWhitelist` — default deny, only whitelisted markets eligible for live trading
 - `StagedPositionSizer` — live trading scales through stages (shadow → 10% → 25% → 50% → 100%)
 - Reconciliation auto-closes positions if drift >$10
@@ -135,6 +141,7 @@ See `RISK_CONFIG.yaml` for default risk thresholds and `SAFETY_CHECKLIST.md` for
 All settings come from environment variables (see `.env.example`). Key settings:
 - `DATABASE_URL` — SQLite dev default, Postgres for production (e.g., `postgresql://user:pass@host:5432/polyclaw`)
 - `MARKET_SOURCE=sample|polymarket` — data source toggle
+- `POLYMARKET_POSITIONS_URL` — CLOB endpoint for positions (default `https://clob.polymarket.com/positions`)
 - `EXECUTION_MODE=paper|live` — execution mode
 - `REQUIRE_APPROVAL=true|false` — approval gate
 - `AUTO_EXECUTE=true|false` — auto-execute approved decisions

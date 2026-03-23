@@ -6,10 +6,23 @@ PolyClaw is a guarded Polymarket auto-analysis and execution framework. It is de
 2. Enrich with evidence from news / research sources
 3. Score opportunity + confidence
 4. Apply risk controls
-5. Create orders in paper mode or guarded live mode
+5. Create orders in paper mode or guarded live mode (via Polymarket CTF on Polygon)
 6. Record positions, fills, and decisions for review
 
-> Default mode is **paper trading**. Live execution is intentionally gated behind configuration and risk controls.
+> Default mode is **paper trading**. Live execution is intentionally gated behind configuration, startup prerequisites, and risk controls.
+
+## Live Trading Readiness
+
+PolyClaw is at **readiness level 8.5/10** for live trading. Key capabilities:
+
+- **Confirmed CTF ABI selectors** — `createOrder=0x6f652e1a`, `cancelOrder=0x0fdb031d`, `getBalance=0x4e11e440`
+- **Real on-chain position queries** — `_query_ctf_positions()` via `eth_call` to CTF `getBalance`
+- **Startup prerequisite validation** — `LiveTradingPrerequisites` checks RPC, selectors, contract address, balances before enabling live mode
+- **Reconciliation gating** — live trading blocked if Polymarket API or CTF chain positions are unreachable
+- **Closed-loop smoke tests** — `test_live_smoke.py` exercises full pipeline (run manually with `-m live_manual`)
+- **Shadow mode** — validate signals against real outcomes before live capital at risk
+
+See `SAFETY_CHECKLIST.md` and `docs/superpowers/plans/2026-03-23-ctf-confident-plan.md` for pre-live requirements.
 
 ## Features
 
@@ -17,6 +30,10 @@ PolyClaw is a guarded Polymarket auto-analysis and execution framework. It is de
 - Two built-in strategies: **EventCatalyst** (high-conviction events near resolution) and **LiquidityMomentum** (volume spike + breakout)
 - Backtesting engine with walk-forward validation and performance reports
 - Portfolio-level risk management: Kelly position sizing, event cluster tracking, circuit breakers
+- **Live CTF trading via Polygon** — confirmed ABI selectors, EIP-1559 transactions, fill status polling, on-chain position queries
+- **Startup prerequisite guard** — `LiveTradingPrerequisites` validates RPC, selectors, balances before enabling live mode
+- **Reconciliation gating** — blocks live trading when Polymarket API or CTF chain position sources are unavailable
+- **Shadow mode** — simulate execution against real market outcomes before live capital at risk
 - Postgres persistence with Alembic migrations (SQLite for dev)
 - Historical data ingestion pipeline with Lambda + EventBridge
 - Terraform infrastructure (RDS, S3, Lambda, EventBridge, ECS Fargate, ALB, Secrets Manager, Grafana, CloudWatch Alarms, DR replication)
@@ -71,9 +88,15 @@ polyclaw backtest    # Run backtest with walk-forward validation
 - `POST /decisions/{id}/approve` — Approve a decision
 - `POST /runner/tick` — Run full scan + execute-ready cycle
 - `POST /execute-ready` — Execute all approved decisions
+- `GET /orders` / `GET /orders/{id}` — Order tracking
 - `GET /positions` — Current positions
 - `GET /audit-logs` — Audit trail
 - `GET/POST /kill-switch` — Kill switch status and control
+- `POST /reconciliation/run` / `GET /reconciliation/report` — Position reconciliation
+- `GET /shadow/results` / `GET /shadow/accuracy` / `GET /shadow/positions` — Shadow mode
+- `POST /shadow/reset` / `GET/POST /shadow/mode` — Shadow mode control
+- `GET /reports/pnl` / `GET /reports/attribution` / `GET /reports/daily` — PnL and attribution reports
+- `GET /health/detailed` — Detailed health check (DB, Polymarket API, CTF, data freshness, kill switch)
 
 ## Safe Defaults
 

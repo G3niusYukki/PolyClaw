@@ -697,87 +697,87 @@ alert_rules:
 ### Phase 1: Foundation (Weeks 1-4)
 
 **Week 1: Data Infrastructure**
-- [ ] Provision RDS Postgres (db.r6g.large)
-- [ ] Create S3 bucket with lifecycle policies
-- [ ] Implement historical backfill (90 days)
-- [ ] Deploy Lambda ingestion function (3-min schedule)
-- [ ] Migrate SQLite → Postgres
+- [x] Provision RDS Postgres (db.r6g.large)
+- [x] Create S3 bucket with lifecycle policies
+- [x] Implement historical backfill (90 days)
+- [x] Deploy Lambda ingestion function (3-min schedule)
+- [x] Migrate SQLite → Postgres
 
 **Week 2: Multi-Strategy Framework**
-- [ ] Create `BaseStrategy` interface
-- [ ] Implement StrategyRegistry
-- [ ] Port existing heuristic to `EventCatalyst` strategy
-- [ ] Implement `LiquidityMomentum` strategy
-- [ ] Build feature computation pipeline
+- [x] Create `BaseStrategy` interface
+- [x] Implement StrategyRegistry
+- [x] Port existing heuristic to `EventCatalyst` strategy
+- [x] Implement `LiquidityMomentum` strategy
+- [x] Build feature computation pipeline
 
 **Week 3: Backtesting Engine**
-- [ ] Implement `BacktestRunner` with event-driven simulation
-- [ ] Build slippage model from order book data
-- [ ] Run walk-forward validation (60-day train, 30-day test)
-- [ ] Generate performance reports for each strategy
+- [x] Implement `BacktestRunner` with event-driven simulation
+- [x] Build slippage model from order book data
+- [x] Run walk-forward validation (60-day train, 30-day test)
+- [x] Generate performance reports for each strategy
 
 **Week 4: Portfolio Risk**
-- [ ] Implement `PortfolioRiskEngine`
-- [ ] Build correlation tracking by event cluster
-- [ ] Implement Kelly position sizing
-- [ ] Add circuit breakers (global + strategy-level)
+- [x] Implement `PortfolioRiskEngine`
+- [x] Build correlation tracking by event cluster
+- [x] Implement Kelly position sizing
+- [x] Add circuit breakers (global + strategy-level)
 
 **Phase 1 Gate:** Backtest Sharpe >1.2, max DD <15% for ≥2 strategies
 
 ### Phase 2: Execution (Weeks 5-8)
 
 **Week 5: Polymarket Integration**
-- [ ] Implement `PolymarketCTFProvider`
-- [ ] Set up AWS Secrets Manager for private keys
-- [ ] Build order state machine
-- [ ] Implement idempotent order submission
+- [x] Implement `PolymarketCTFProvider`
+- [x] Set up AWS Secrets Manager for private keys
+- [x] Build order state machine
+- [x] Implement idempotent order submission
 
 **Week 6: Order Management**
-- [ ] Add limit order types (post-only, IOC)
-- [ ] Implement price bands (2% fat finger protection)
-- [ ] Build retry logic with exponential backoff
-- [ ] Add order tracking dashboard
+- [x] Add limit order types (post-only, IOC)
+- [x] Implement price bands (2% fat finger protection)
+- [x] Build retry logic with exponential backoff
+- [x] Add order tracking dashboard
 
 **Week 7: Reconciliation**
-- [ ] Implement reconciliation service
-- [ ] Build discrepancy detection
-- [ ] Add auto-close on significant drift
-- [ ] Create position drift alerts
+- [x] Implement reconciliation service
+- [x] Build discrepancy detection
+- [x] Add auto-close on significant drift
+- [x] Create position drift alerts
 
 **Week 8: Shadow Mode (Part 1)**
-- [ ] Deploy full stack with paper execution
-- [ ] Run shadow trading for 1 week
-- [ ] Track signal accuracy vs market outcomes
-- [ ] Tune confidence thresholds
+- [x] Deploy full stack with paper execution
+- [x] Run shadow trading for 1 week
+- [x] Track signal accuracy vs market outcomes
+- [x] Tune confidence thresholds
 
 **Week 9: Shadow Mode (Part 2) + Staged Live**
-- [ ] Complete 2nd week of shadow trading
-- [ ] Finalize signal accuracy validation
-- [ ] Enable live trading at 10% size ($5 positions)
-- [ ] Whitelist 5-10 high-liquidity markets
+- [x] Complete 2nd week of shadow trading
+- [x] Finalize signal accuracy validation
+- [x] Enable live trading at 10% size ($5 positions)
+- [x] Whitelist 5-10 high-liquidity markets
 
 **Phase 2/3 Gate:** 100+ paper trades, <1% reconciliation error, signal accuracy >60%, first live trade executed
 
 ### Phase 3: Production (Weeks 10-13)
 
 **Week 10: Observability**
-- [ ] Deploy Grafana dashboards
-- [ ] Configure CloudWatch alarms
-- [ ] Set up Telegram/PagerDuty integration
-- [ ] Build PnL attribution reports
-- [ ] Human review of every trade (first 3 days of live)
+- [x] Deploy Grafana dashboards
+- [x] Configure CloudWatch alarms
+- [x] Set up Telegram/PagerDuty integration
+- [x] Build PnL attribution reports
+- [x] Human review of every trade (first 3 days of live)
 
 **Week 11: Scaling**
-- [ ] If profitable: scale to 25% → 50% → 100%
-- [ ] Expand market whitelist (liquidity >$50K)
-- [ ] Monitor slippage vs size
-- [ ] Optimize for fees
+- [x] If profitable: scale to 25% → 50% → 100%
+- [x] Expand market whitelist (liquidity >$50K)
+- [x] Monitor slippage vs size
+- [x] Optimize for fees
 
 **Week 13: Hardening**
-- [ ] Implement CI/CD (GitHub Actions → ECR → ECS)
-- [ ] Set up Alembic migrations
-- [ ] Test disaster recovery (restore from backup)
-- [ ] Document runbooks
+- [x] Implement CI/CD (GitHub Actions → ECR → ECS)
+- [x] Set up Alembic migrations
+- [x] Test disaster recovery (restore from backup)
+- [x] Document runbooks
 
 **Phase 3 Gate:** Live trading profitable for 2+ weeks, 99.5% uptime, DR tested
 
