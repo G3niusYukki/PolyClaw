@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any, cast
 
 import httpx
+from sqlalchemy.orm import joinedload
 
 from polyclaw.config import settings
 from polyclaw.db import SessionLocal
@@ -66,7 +67,7 @@ class OrderResult:
             'mode': self.mode,
             'filled_size': self.filled_size,
             'avg_fill_price': self.avg_fill_price,
-            'venue_order_id': self.tx_hash,
+            'tx_hash': self.tx_hash,
         }
 
 
@@ -261,7 +262,9 @@ class PolymarketCTFProvider:
         """
         chain_positions = self._query_ctf_positions()
         if chain_positions:
+            logger.info("Using real CTF contract positions")
             return chain_positions
+        logger.info("Using DB-as-chain-proxy for positions (real contract positions not yet implemented)")
         return self._query_positions_from_db()
 
     def get_balances(self) -> dict[str, float]:
@@ -534,7 +537,7 @@ class PolymarketCTFProvider:
             from sqlalchemy import and_, select
 
             rows = session.scalars(
-                select(Order).where(
+                select(Order).options(joinedload(Order.decision)).where(
                     and_(Order.status.in_(['filled', 'submitted']),
                          Order.mode == 'live')
                 )
@@ -602,6 +605,9 @@ class PolymarketCTFProvider:
             # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
             # Function selector: keccak('cancelOrder(bytes32,uint256,uint256)') — TODO: confirm from real CTF ABI
             cancel_selector = '0xabc12345'
+            if cancel_selector == '0xabc12345':
+                logger.warning("cancelOrder selector not confirmed from real CTF ABI — skipping cancel")
+                return False
             order_clean = order_hash[2:] if order_hash.startswith('0x') else order_hash
             market_hash = order_clean[:64].rjust(64, '0')
             outcome_hex = '0' * 64
