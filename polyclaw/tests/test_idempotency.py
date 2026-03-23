@@ -26,6 +26,7 @@ class TestIdempotentOrderSubmission:
     def setup_method(self):
         """Set up a provider with a mock signer and broadcast for all tests."""
         from unittest.mock import patch
+
         from polyclaw.providers.signer import WalletSigner
         self.provider = PolymarketCTFProvider()
         # Use a real signer so that _broadcast_signed_tx doesn't fail on address lookup
