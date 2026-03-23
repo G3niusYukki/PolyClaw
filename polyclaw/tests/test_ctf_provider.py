@@ -363,7 +363,7 @@ class TestBalanceAndCancel:
         real_signer = WalletSigner(private_key='0x' + 'ee' * 32)
         provider._signer = real_signer
         with patch.object(provider, '_rpc_call') as mock_rpc, \
-             patch.object(provider, '_get_gas_params', return_value={'maxFeePerGas': 2e9, 'maxPriorityFeePerGas': 3e7}), \
+             patch.object(provider, '_get_gas_params', return_value={'maxFeePerGas': 2_000_000_000, 'maxPriorityFeePerGas': 30_000_000}), \
              patch.object(provider, '_get_nonce', return_value=0):
             mock_rpc.return_value = '0x' + 'f' * 64
             result = provider._cancel_ctf_order('0x' + 'aabbcc' * 11)

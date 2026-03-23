@@ -531,7 +531,7 @@ class PolymarketCTFProvider:
         """
         session = SessionLocal()
         try:
-            from sqlalchemy import select, and_
+            from sqlalchemy import and_, select
 
             rows = session.scalars(
                 select(Order).where(
@@ -541,9 +541,9 @@ class PolymarketCTFProvider:
             ).all()
             positions: dict[str, dict] = {}
             for row in rows:
-                key = f"{row.market_id_fk}:{row.side}"
+                key = f"{row.decision_id_fk}:{row.side}"
                 if key not in positions:
-                    positions[key] = {'market_id': row.market_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
+                    positions[key] = {'decision_id': row.decision_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
                 positions[key]['size'] += row.size
                 positions[key]['value'] += row.notional_usd
             return list(positions.values())
@@ -554,20 +554,25 @@ class PolymarketCTFProvider:
         """
         Query Polygon for USDC and ETH (MATIC) balances via real RPC calls.
         """
-        signer_address = self._signer.address
+        try:
+            signer_address = self._signer.address
+        except ValueError:
+            return {'usdc': 0.0, 'eth': 0.0}
         if not signer_address or signer_address == '0x' + '0' * 40:
             return {'usdc': 0.0, 'eth': 0.0}
 
         try:
             # USDC balance via ERC-20 balanceOf(address)
             usdc_data = '0x70a08231' + signer_address[2:].rjust(64, '0')  # balanceOf(address)
-            usdc_result = self._rpc_call('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
-            usdc_raw = int(usdc_result, 16) if usdc_result else 0
+            usdc_resp = self._rpc_call('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
+            usdc_result = usdc_resp.get('result', '0x0') if isinstance(usdc_resp, dict) else '0x0'
+            usdc_raw = int(cast(str, usdc_result), 16)
             usdc_balance = usdc_raw / USDC_DECIMALS
 
             # MATIC native balance via eth_getBalance
-            matic_result = self._rpc_call('eth_getBalance', [signer_address, 'latest'])
-            matic_raw = int(matic_result, 16) if matic_result else 0
+            matic_resp = self._rpc_call('eth_getBalance', [signer_address, 'latest'])
+            matic_result = matic_resp.get('result', '0x0') if isinstance(matic_resp, dict) else '0x0'
+            matic_raw = int(cast(str, matic_result), 16)
             matic_balance = matic_raw / 1e18
 
             logger.info("Balance usdc=%.2f matic=%.4f for %s", usdc_balance, matic_balance, signer_address[:10])
@@ -597,9 +602,11 @@ class PolymarketCTFProvider:
             # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
             # Function selector: keccak('cancelOrder(bytes32,uint256,uint256)') — TODO: confirm from real CTF ABI
             cancel_selector = '0xabc12345'
-            market_hash = order_hash[:66].rjust(66, '0') if len(order_hash) >= 66 else order_hash.rjust(66, '0')
+            order_clean = order_hash[2:] if order_hash.startswith('0x') else order_hash
+            market_hash = order_clean[:64].rjust(64, '0')
             outcome_hex = '0' * 64
             price_hex = '0' * 64
+            # Build calldata as a single clean hex string (no embedded 0x prefixes)
             call_data = cancel_selector + market_hash + outcome_hex + price_hex
 
             tx_dict = {
