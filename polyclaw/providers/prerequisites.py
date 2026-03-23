@@ -82,13 +82,13 @@ class LiveTradingPrerequisites:
         return checks
 
     def raise_if_any_failed(self) -> None:
-        """Raise ValueError listing all failed checks."""
+        """Raise PrerequisiteError listing all failed checks."""
         checks = self.check_all()
         failed = [c for c in checks if not c.passed]
         if failed:
             names = ', '.join(c.name for c in failed)
             details = '; '.join(f'{c.name}={c.detail}' for c in failed)
-            raise ValueError(f"Live trading prerequisites failed: [{names}]. Details: {details}")
+            raise PrerequisiteError(f"Live trading prerequisites failed: [{names}]. Details: {details}")
 
 
 class PrerequisiteError(ValueError):
