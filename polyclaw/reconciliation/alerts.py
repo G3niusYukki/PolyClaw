@@ -7,8 +7,7 @@ from enum import Enum
 from sqlalchemy.orm import Session
 
 from polyclaw.notifications import NotificationService
-from polyclaw.reconciliation.service import DRIFT_CRITICAL_THRESHOLD
-from polyclaw.reconciliation.types import ReconciliationReport
+from polyclaw.reconciliation.types import DRIFT_CRITICAL_THRESHOLD, ReconciliationReport
 from polyclaw.safety import log_event
 
 
@@ -26,7 +25,7 @@ class DriftAlerts:
       - WARNING: total_drift_usd < 5.0
       - CRITICAL: total_drift_usd >= 5.0
 
-    Uses DRIFT_CRITICAL_THRESHOLD from service.py for CRITICAL/WARNING threshold.
+    Uses DRIFT_CRITICAL_THRESHOLD from reconciliation.types.
     """
 
     def __init__(self):

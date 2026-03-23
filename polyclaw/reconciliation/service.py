@@ -4,20 +4,19 @@ Reconciliation service — reconciles positions across system DB, Polymarket API
 
 from typing import TYPE_CHECKING
 
-# Shared threshold constants — must stay consistent across reconciliation/.
-# - DRIFT_CRITICAL_THRESHOLD (5.0): triggers CRITICAL severity in alerts.py and
-#   sets is_critical=True in detector.py. Aligned with safety.py audit severity levels.
-# - DRIFT_AUTO_CLOSE_THRESHOLD (10.0): triggers auto-close in this service.
-DRIFT_CRITICAL_THRESHOLD: float = 5.0
-DRIFT_AUTO_CLOSE_THRESHOLD: float = 10.0
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from polyclaw.models import Order, Position
 from polyclaw.reconciliation.alerts import DriftAlerts
 from polyclaw.reconciliation.detector import DiscrepancyDetector
-from polyclaw.reconciliation.types import DiscrepancyItem, PositionSummary, ReconciliationReport
+from polyclaw.reconciliation.types import (
+    DRIFT_AUTO_CLOSE_THRESHOLD,
+    DRIFT_CRITICAL_THRESHOLD,
+    DiscrepancyItem,
+    PositionSummary,
+    ReconciliationReport,
+)
 from polyclaw.safety import log_event
 from polyclaw.timeutils import utcnow
 

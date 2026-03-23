@@ -1,5 +1,5 @@
 """
-Shared types for the reconciliation package.
+Shared types and constants for the reconciliation package.
 
 These dataclasses are used across detector.py, service.py, and alerts.py
 and are kept in a separate module to avoid circular imports.
@@ -7,6 +7,13 @@ and are kept in a separate module to avoid circular imports.
 
 from dataclasses import dataclass
 from datetime import datetime
+
+# Threshold constants — must stay consistent across reconciliation/.
+# - DRIFT_CRITICAL_THRESHOLD (5.0): triggers CRITICAL severity in alerts.py and
+#   is_critical=True in detector.py.
+# - DRIFT_AUTO_CLOSE_THRESHOLD (10.0): triggers auto-close in service.py.
+DRIFT_CRITICAL_THRESHOLD: float = 5.0
+DRIFT_AUTO_CLOSE_THRESHOLD: float = 10.0
 
 
 @dataclass

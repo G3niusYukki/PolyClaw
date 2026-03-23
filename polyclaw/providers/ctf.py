@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 USDC_CONTRACT = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'  # Polygon USDC
 USDC_DECIMALS = 1_000_000
+# cancelOrder selector — MUST be confirmed against CTF contract ABI on Polyscan before live trading.
+# When this is the placeholder, _cancel_ctf_order logs and returns False (no gas spent).
+_CANCEL_SELECTOR = '0xabc12345'  # TODO: replace with confirmed selector
 
 
 # ---------------------------------------------------------------------------
@@ -636,9 +639,8 @@ class PolymarketCTFProvider:
             gas_params = self._get_gas_params()
 
             # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
-            # Function selector: keccak('cancelOrder(bytes32,uint256,uint256)') — TODO: confirm from real CTF ABI
-            cancel_selector = '0xabc12345'
-            if cancel_selector == '0xabc12345':
+            # _CANCEL_SELECTOR must be confirmed from CTF contract ABI on Polyscan
+            if _CANCEL_SELECTOR == '0xabc12345':
                 logger.warning("cancelOrder selector not confirmed from real CTF ABI — skipping cancel")
                 return False
             order_clean = order_hash[2:] if order_hash.startswith('0x') else order_hash
@@ -646,7 +648,7 @@ class PolymarketCTFProvider:
             outcome_hex = '0' * 64
             price_hex = '0' * 64
             # Build calldata as a single clean hex string (no embedded 0x prefixes)
-            call_data = cancel_selector + market_hash + outcome_hex + price_hex
+            call_data = _CANCEL_SELECTOR + market_hash + outcome_hex + price_hex
 
             tx_dict = {
                 'to': self._contract_address,

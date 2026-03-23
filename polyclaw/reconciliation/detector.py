@@ -5,8 +5,7 @@ Discrepancy detection between system DB, Polymarket API, and CTF contract positi
 from dataclasses import dataclass
 from enum import Enum
 
-from polyclaw.reconciliation.types import PositionSummary
-from polyclaw.reconciliation.service import DRIFT_CRITICAL_THRESHOLD
+from polyclaw.reconciliation.types import DRIFT_CRITICAL_THRESHOLD, PositionSummary
 
 
 class DiscrepancyCategory(str, Enum):
@@ -44,7 +43,7 @@ class DiscrepancyDetector:
 
     Comparison is done across all three sources pairwise. The `tolerance`
     parameter controls the floating-point comparison threshold (default $0.01).
-    Uses DRIFT_CRITICAL_THRESHOLD from service.py for the is_critical flag.
+    Uses DRIFT_CRITICAL_THRESHOLD from reconciliation.types for the is_critical flag.
     """
 
     def __init__(self, tolerance: float = 0.01):

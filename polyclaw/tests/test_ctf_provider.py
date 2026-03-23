@@ -357,14 +357,17 @@ class TestBalanceAndCancel:
         assert balances['eth'] == 0.0
 
     def test_cancel_calls_broadcast(self):
-        """_cancel_ctf_order calls eth_sendRawTransaction."""
+        """cancel_order calls _cancel_ctf_order which calls eth_sendRawTransaction when selector confirmed."""
         from polyclaw.providers.ctf import PolymarketCTFProvider
+        from polyclaw.providers.signer import WalletSigner
+
         provider = PolymarketCTFProvider()
         real_signer = WalletSigner(private_key='0x' + 'ee' * 32)
         provider._signer = real_signer
-        with patch.object(provider, '_rpc_call') as mock_rpc, \
+        # Patch the selector value directly in the module so the guard passes
+        with patch('polyclaw.providers.ctf._CANCEL_SELECTOR', '0x00000001'), \
+             patch.object(provider, '_rpc_call', return_value='0x' + 'f' * 64), \
              patch.object(provider, '_get_gas_params', return_value={'maxFeePerGas': 2_000_000_000, 'maxPriorityFeePerGas': 30_000_000}), \
              patch.object(provider, '_get_nonce', return_value=0):
-            mock_rpc.return_value = '0x' + 'f' * 64
             result = provider._cancel_ctf_order('0x' + 'aabbcc' * 11)
             assert result is True
