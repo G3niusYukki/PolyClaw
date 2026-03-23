@@ -541,9 +541,9 @@ class PolymarketCTFProvider:
             ).all()
             positions: dict[str, dict] = {}
             for row in rows:
-                key = f"{row.decision_id_fk}:{row.side}"
+                key = f"{row.decision.market_id_fk}:{row.side}"
                 if key not in positions:
-                    positions[key] = {'decision_id': row.decision_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
+                    positions[key] = {'market_id': row.decision.market_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
                 positions[key]['size'] += row.size
                 positions[key]['value'] += row.notional_usd
             return list(positions.values())
