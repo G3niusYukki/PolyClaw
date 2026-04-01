@@ -1,48 +1,72 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from polyclaw.config import settings
 from polyclaw.evidence import HeuristicEvidenceEngine
 from polyclaw.proposals import ProposalPreview
 from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
-from polyclaw.providers.sample_market import SampleMarketProvider
 from polyclaw.ranking import MarketRanker
 from polyclaw.repositories import create_decision, replace_evidence, upsert_market
 from polyclaw.risk import RiskEngine
 from polyclaw.safety import log_event
 from polyclaw.strategies import FeatureEngine
+from polyclaw.strategies.llm_probability import LLMProbabilityStrategy
+from polyclaw.strategies.news_catalyst import NewsCatalystStrategy
+from polyclaw.strategies.smart_money import SmartMoneyStrategy
+from polyclaw.strategies.cross_platform_arb import CrossPlatformArbStrategy
 from polyclaw.strategies.registry import StrategyRegistry
-from polyclaw.strategy import StrategyEngine
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisService:
     def __init__(self):
-        if settings.market_source == 'polymarket':
-            self.market_provider = PolymarketGammaProvider()
-        else:
-            self.market_provider = SampleMarketProvider()
+        self.market_provider = PolymarketGammaProvider()
         self.evidence_engine = HeuristicEvidenceEngine()
         self.ranker = MarketRanker()
-        self.strategy = StrategyEngine()
         self.risk = RiskEngine()
         self.feature_engine = FeatureEngine()
         self._registry = StrategyRegistry()
+        self._register_default_strategies()
+
+    def _register_default_strategies(self) -> None:
+        """Register built-in strategies based on configuration."""
+        if settings.llm_api_key:
+            try:
+                self._registry.register(LLMProbabilityStrategy())
+                logger.info('Registered LLM Probability strategy')
+            except Exception as exc:
+                logger.warning('Failed to register LLM strategy: %s', exc)
+        if settings.llm_api_key and settings.news_fetcher_enabled:
+            try:
+                self._registry.register(NewsCatalystStrategy())
+                logger.info('Registered News Catalyst strategy')
+            except Exception as exc:
+                logger.warning('Failed to register News Catalyst strategy: %s', exc)
+        if settings.llm_api_key and settings.onchain_tracking_enabled:
+            try:
+                self._registry.register(SmartMoneyStrategy())
+                logger.info('Registered Smart Money strategy')
+            except Exception as exc:
+                logger.warning('Failed to register Smart Money strategy: %s', exc)
+        if settings.llm_api_key and settings.cross_platform_enabled:
+            try:
+                self._registry.register(CrossPlatformArbStrategy())
+                logger.info('Registered Cross-Platform Arb strategy')
+            except Exception as exc:
+                logger.warning('Failed to register Cross-Platform Arb strategy: %s', exc)
 
     def _get_enabled_strategies(self) -> list:
         """Get enabled strategies from registry. Returns empty list if none registered."""
         return self._registry.list_enabled()  # type: ignore[no-any-return]
 
     def _generate_multi_strategy_proposals(self, market, evidences: list):
-        """Generate proposals from all enabled strategies.
-
-        Returns a list of proposals from each strategy that produces a signal.
-        Falls back to the legacy StrategyEngine if no strategies are registered.
-        """
+        """Generate proposals from all enabled strategies."""
         strategies = self._get_enabled_strategies()
 
         if not strategies:
-            # Backward compatibility: use legacy strategy engine
-            proposal = self.strategy.score_market(market, evidences)
-            return [proposal] if proposal else []
+            return []
 
         proposals = []
         features_by_strategy = self.feature_engine.compute_features(market, strategies)
@@ -51,7 +75,6 @@ class AnalysisService:
             features = features_by_strategy.get(strat.strategy_id, {})
             signal = strat.generate_signals(market, features)
             if signal is not None:
-                # Convert Signal to DecisionProposal for compatibility
                 from polyclaw.domain import DecisionProposal
                 stake = min(settings.max_position_usd, 10 + signal.edge_bps / 100)
                 proposals.append(
@@ -77,15 +100,11 @@ class AnalysisService:
     def scan(self, session: Session) -> tuple[int, int]:
         try:
             markets = self.market_provider.list_markets(limit=settings.scan_limit)
-            log_event(session, 'market_fetch', f'source={settings.market_source}|count={len(markets)}', 'ok')
+            log_event(session, 'market_fetch', f'source=polymarket|count={len(markets)}', 'ok')
         except Exception as exc:
-            log_event(session, 'market_fetch', f'source={settings.market_source}|error={exc}', 'error')
+            log_event(session, 'market_fetch', f'source=polymarket|error={exc}', 'error')
             session.commit()
-            if settings.market_source == 'polymarket':
-                markets = SampleMarketProvider().list_markets(limit=settings.scan_limit)
-                log_event(session, 'market_fetch_fallback', f'source=sample|count={len(markets)}', 'ok')
-            else:
-                raise
+            raise
 
         ranked_markets = self.ranker.rank(markets, limit=settings.scan_limit)
         created = 0
@@ -110,10 +129,7 @@ class AnalysisService:
         return len(ranked_markets), created
 
     def ranked_candidates(self, limit: int | None = None):
-        try:
-            markets = self.market_provider.list_markets(limit=settings.scan_limit)
-        except Exception:
-            markets = SampleMarketProvider().list_markets(limit=settings.scan_limit)
+        markets = self.market_provider.list_markets(limit=settings.scan_limit)
         ranked = self.ranker.rank(markets, limit=limit or settings.scan_limit)
         return ranked
 
@@ -144,7 +160,6 @@ class AnalysisService:
                 )
                 continue
 
-            # Select the best proposal (highest edge_bps)
             best_proposal = max(proposals, key=lambda p: p.edge_bps)
             ok, flags = self.risk.evaluate(session, market, best_proposal)
             previews.append(

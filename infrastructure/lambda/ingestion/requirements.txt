@@ -1,3 +1,0 @@
-# Runtime dependencies for the Lambda ingestion function.
-# Package these with: pip install -t ./lib -r requirements.txt
-boto3>=1.34

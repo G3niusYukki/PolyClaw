@@ -9,7 +9,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from polyclaw.notifications import NotificationService
 from polyclaw.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -172,19 +171,13 @@ class OrderStateMachine:
         return list(history)
 
     def _emit_event(self, order: object, transition: StateTransition) -> None:
-        """Emit a notification event for the state transition."""
-        try:
-            NotificationService.notify(
-                session=None,  # type: ignore[arg-type]
-                channel='order_state_change',
-                message=(
-                    f"Order {getattr(order, 'client_order_id', 'unknown')} "
-                    f"transitioned from {transition.from_state} to {transition.to_state}"
-                ),
-            )
-        except Exception as exc:
-            # Don't let notification failures affect state transitions
-            logger.warning("Failed to emit order state change notification: %s", exc)
+        """Log the state transition event."""
+        logger.info(
+            "Order state change: %s -> %s for order %s",
+            transition.from_state,
+            transition.to_state,
+            getattr(order, 'client_order_id', 'unknown'),
+        )
 
     def can_transition(self, current_state: OrderState, target_state: OrderState) -> bool:
         """Check if a transition is valid without raising an error."""

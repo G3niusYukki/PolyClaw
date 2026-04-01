@@ -2,7 +2,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from polyclaw.models import ProposalRecord
-from polyclaw.notifications import NotificationService
 from polyclaw.proposals import ProposalPreview
 from polyclaw.safety import log_event
 from polyclaw.timeutils import utcnow
@@ -41,7 +40,7 @@ class ProposalWorkflowService:
         record.updated_at = utcnow()
         log_event(session, 'proposal_status', f'id={proposal_id}|status={status}', 'ok')
         if status == 'approved':
-            NotificationService.notify(session, 'internal', f'Proposal approved: {record.title}')
+            log_event(session, 'proposal_approved', f'id={proposal_id}|title={record.title}', 'ok')
         session.commit()
         session.refresh(record)
         return record

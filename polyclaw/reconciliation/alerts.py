@@ -1,14 +1,16 @@
 """
-Drift alert system — sends notifications for reconciliation discrepancies.
+Drift alert system — logs notifications for reconciliation discrepancies.
 """
 
+import logging
 from enum import Enum
 
 from sqlalchemy.orm import Session
 
-from polyclaw.notifications import NotificationService
 from polyclaw.reconciliation.types import DRIFT_CRITICAL_THRESHOLD, ReconciliationReport
 from polyclaw.safety import log_event
+
+logger = logging.getLogger(__name__)
 
 
 class DriftSeverity(str, Enum):
@@ -29,7 +31,7 @@ class DriftAlerts:
     """
 
     def __init__(self):
-        self.notification_service = NotificationService
+        pass
 
     def send_drift_alert(self, session: Session, report: ReconciliationReport) -> DriftSeverity:
         """
@@ -69,10 +71,6 @@ class DriftAlerts:
 
         # Send notification for CRITICAL alerts only
         if severity == DriftSeverity.CRITICAL:
-            self.notification_service.notify(
-                session,
-                channel='reconciliation_alert',
-                message=message,
-            )
+            logger.critical("RECONCILIATION DRIFT ALERT: %s", message)
 
         return severity
