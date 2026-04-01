@@ -6,20 +6,20 @@ from polyclaw.timeutils import utcnow
 
 
 def _make_market(**overrides) -> MarketSnapshot:
-    defaults = dict(
-        market_id='test-1',
-        title='Will X happen?',
-        description='A test market.',
-        yes_price=0.65,
-        no_price=0.35,
-        spread_bps=100,
-        liquidity_usd=5000.0,
-        volume_24h_usd=2000.0,
-        category='politics',
-        event_key='test-event',
-        closes_at=None,
-        fetched_at=utcnow(),
-    )
+    defaults: dict = {
+        'market_id': 'test-1',
+        'title': 'Will X happen?',
+        'description': 'A test market.',
+        'yes_price': 0.65,
+        'no_price': 0.35,
+        'spread_bps': 100,
+        'liquidity_usd': 5000.0,
+        'volume_24h_usd': 2000.0,
+        'category': 'politics',
+        'event_key': 'test-event',
+        'closes_at': None,
+        'fetched_at': utcnow(),
+    }
     defaults.update(overrides)
     return MarketSnapshot(**defaults)
 

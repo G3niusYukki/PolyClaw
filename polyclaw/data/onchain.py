@@ -81,7 +81,7 @@ class OnChainAnalyzer:
         result = resp.json()
         if 'error' in result:
             raise RuntimeError(f"RPC error: {result['error']}")
-        return result.get('result', {})
+        return cast('dict[str, Any]', result.get('result', {}))
 
     def get_large_positions(
         self,

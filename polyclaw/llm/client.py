@@ -3,7 +3,7 @@
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from polyclaw.config import settings
 
@@ -114,7 +114,7 @@ class LLMClient:
                 temperature=self._temperature,
             )
             self._total_tokens += resp.usage.input_tokens + resp.usage.output_tokens
-            return resp.content[0].text
+            return cast(str, resp.content[0].text)
 
     @staticmethod
     def _extract_json(text: str) -> dict | None:
@@ -122,7 +122,7 @@ class LLMClient:
         # Try direct parse
         text = text.strip()
         try:
-            return json.loads(text)
+            return cast('dict[str, Any]', json.loads(text))
         except json.JSONDecodeError:
             pass
         # Try extracting from markdown code block
@@ -132,7 +132,7 @@ class LLMClient:
                 end = text.find('```', start)
                 if end != -1:
                     try:
-                        return json.loads(text[start:end].strip())
+                        return cast('dict[str, Any]', json.loads(text[start:end].strip()))
                     except json.JSONDecodeError:
                         continue
         # Try finding first { to last }
@@ -140,7 +140,7 @@ class LLMClient:
         end = text.rfind('}')
         if start != -1 and end > start:
             try:
-                return json.loads(text[start:end + 1])
+                return cast('dict[str, Any]', json.loads(text[start:end + 1]))
             except json.JSONDecodeError:
                 pass
         logger.warning('Failed to extract JSON from LLM response')
