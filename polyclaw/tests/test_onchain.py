@@ -7,9 +7,9 @@ import pytest
 
 from polyclaw.data.onchain import (
     OnChainAnalyzer,
-    WhalePosition,
-    WalletActivity,
     UnusualActivity,
+    WalletActivity,
+    WhalePosition,
 )
 
 

@@ -1,7 +1,7 @@
+from datetime import timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from datetime import timedelta
 
 from polyclaw.config import settings
 from polyclaw.domain import DecisionProposal, EvidenceItem, MarketSnapshot

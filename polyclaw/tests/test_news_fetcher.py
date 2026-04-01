@@ -1,10 +1,10 @@
 """Tests for news fetcher module."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from polyclaw.data.news_fetcher import NewsFetcher, NewsArticle
+from polyclaw.data.news_fetcher import NewsArticle, NewsFetcher
 
 
 class TestExtractSearchTerms:

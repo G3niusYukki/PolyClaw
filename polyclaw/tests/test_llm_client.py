@@ -1,6 +1,7 @@
 """Tests for the LLM client module."""
 
 import json
+
 import pytest
 
 from polyclaw.llm.client import LLMClient, RateLimiter
@@ -48,6 +49,7 @@ class TestLLMClientJsonExtraction:
         from polyclaw.config import Settings
         s = Settings(llm_api_key='', llm_provider='openai')
         import importlib
+
         import polyclaw.config as cfg
         old = cfg.settings
         cfg.settings = s
@@ -61,8 +63,8 @@ class TestLLMClientJsonExtraction:
 
 class TestLLMClientComplete:
     def test_complete_returns_none_when_rate_limited(self, monkeypatch):
-        from polyclaw.config import Settings
         import polyclaw.config as cfg
+        from polyclaw.config import Settings
         old = cfg.settings
         cfg.settings = Settings(llm_api_key='test-key')
         try:

@@ -11,11 +11,11 @@ from polyclaw.repositories import create_decision, replace_evidence, upsert_mark
 from polyclaw.risk import RiskEngine
 from polyclaw.safety import log_event
 from polyclaw.strategies import FeatureEngine
+from polyclaw.strategies.cross_platform_arb import CrossPlatformArbStrategy
 from polyclaw.strategies.llm_probability import LLMProbabilityStrategy
 from polyclaw.strategies.news_catalyst import NewsCatalystStrategy
-from polyclaw.strategies.smart_money import SmartMoneyStrategy
-from polyclaw.strategies.cross_platform_arb import CrossPlatformArbStrategy
 from polyclaw.strategies.registry import StrategyRegistry
+from polyclaw.strategies.smart_money import SmartMoneyStrategy
 
 logger = logging.getLogger(__name__)
 

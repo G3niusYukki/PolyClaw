@@ -8,7 +8,7 @@ LLM baseline, with confidence boosted by multi-signal alignment.
 import logging
 
 from polyclaw.config import settings
-from polyclaw.data.onchain import OnChainAnalyzer, UnusualActivity, WhalePosition, WalletActivity
+from polyclaw.data.onchain import OnChainAnalyzer, UnusualActivity, WalletActivity, WhalePosition
 from polyclaw.domain import MarketSnapshot
 from polyclaw.llm.client import LLMClient
 from polyclaw.llm.parser import LLMProbabilityEstimate, parse_probability_response
