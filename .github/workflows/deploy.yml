@@ -23,6 +23,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - uses: actions/checkout@v4
@@ -97,6 +98,61 @@ jobs:
             --services ${{ env.ECS_SERVICE }}
 
           echo "ECS deployment completed successfully"
+
+  deploy-staging-services:
+    name: Deploy Staging Services
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    strategy:
+      matrix:
+        service: [ingestion, strategy-engine, execution, monitor]
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-deploy-staging-services
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update ECS task definition for ${{ matrix.service }}
+        env:
+          ECR_REGISTRY: ${{ needs.deploy-staging.outputs.ecr_registry }}
+          IMAGE_TAG: ${{ needs.deploy-staging.outputs.image_tag }}
+          ECS_TASK_FAMILY: staging-polyclaw-${{ matrix.service }}
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $ECS_TASK_FAMILY)
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq \
+            --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            '.taskDefinition | .containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+
+          NEW_TASK=$(echo $NEW_TASK_DEF | jq 'del(.taskDefinitionArn)')
+          NEW_REV=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK" --query 'taskDefinition.revision' --output text)
+          echo "New task definition revision: $NEW_REV"
+
+      - name: Deploy to ECS (staging-${{ matrix.service }})
+        env:
+          ECS_TASK_FAMILY: staging-polyclaw-${{ matrix.service }}
+          ECS_SERVICE: staging-polyclaw-${{ matrix.service }}
+        run: |
+          aws ecs update-service \
+            --cluster staging-polyclaw-cluster \
+            --service $ECS_SERVICE \
+            --task-definition $ECS_TASK_FAMILY \
+            --force-new-deployment \
+            --output json
+
+          echo "Staging deployment of ${{ matrix.service }} initiated"
+
+      - name: Wait for deployment to complete
+        run: |
+          aws ecs wait services-stable \
+            --cluster staging-polyclaw-cluster \
+            --services staging-polyclaw-${{ matrix.service }}
+
+          echo "ECS deployment of ${{ matrix.service }} completed successfully"
 
   deploy-production:
     name: Deploy Production
@@ -174,6 +230,61 @@ jobs:
             --services prod-polyclaw-api
 
           echo "ECS production deployment completed successfully"
+
+  deploy-production-services:
+    name: Deploy Production Services
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    strategy:
+      matrix:
+        service: [ingestion, strategy-engine, execution, monitor]
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PROD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-deploy-prod-services
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update ECS task definition for ${{ matrix.service }}
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.deploy-production.outputs.image_tag }}
+          ECS_TASK_FAMILY: prod-polyclaw-${{ matrix.service }}
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $ECS_TASK_FAMILY)
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq \
+            --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            '.taskDefinition | .containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+
+          NEW_TASK=$(echo $NEW_TASK_DEF | jq 'del(.taskDefinitionArn)')
+          NEW_REV=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK" --query 'taskDefinition.revision' --output text)
+          echo "New task definition revision: $NEW_REV"
+
+      - name: Deploy to ECS (prod-${{ matrix.service }})
+        env:
+          ECS_TASK_FAMILY: prod-polyclaw-${{ matrix.service }}
+          ECS_SERVICE: prod-polyclaw-${{ matrix.service }}
+        run: |
+          aws ecs update-service \
+            --cluster prod-polyclaw-cluster \
+            --service $ECS_SERVICE \
+            --task-definition $ECS_TASK_FAMILY \
+            --force-new-deployment \
+            --output json
+
+          echo "Production deployment of ${{ matrix.service }} initiated"
+
+      - name: Wait for deployment to complete
+        run: |
+          aws ecs wait services-stable \
+            --cluster prod-polyclaw-cluster \
+            --services prod-polyclaw-${{ matrix.service }}
+
+          echo "ECS production deployment of ${{ matrix.service }} completed successfully"
 
       - name: Notify deployment
         run: |
