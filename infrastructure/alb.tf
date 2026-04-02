@@ -10,7 +10,7 @@ resource "aws_lb" "polyclaw" {
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = var.public_subnet_ids
 
-  enable_deletion_protection = false # Set true in production
+  enable_deletion_protection = true
 
   tags = {
     Environment = var.environment

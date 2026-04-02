@@ -126,10 +126,10 @@ resource "aws_db_instance" "polyclaw" {
 
   parameter_group_name = aws_db_parameter_group.polyclaw.name
 
-  multi_az            = false
+  multi_az            = true
   publicly_accessible = false
   skip_final_snapshot = true
-  deletion_protection = false # Set to true in prod
+  deletion_protection = true
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
