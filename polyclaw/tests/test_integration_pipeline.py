@@ -1,8 +1,9 @@
 """Integration tests for the complete trading pipeline."""
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from polyclaw.domain import MarketSnapshot
 from polyclaw.services.runner import RunnerService

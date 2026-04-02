@@ -138,7 +138,7 @@ def test_event_catalyst_rejects_novelty_market():
     signal = strat.generate_signals(m, features)
 
     # Novelty markets get -0.15 conviction penalty, should be rejected
-    assert signal is None, f"Novelty market 'GTA VI' should be rejected due to confidence penalty"
+    assert signal is None, "Novelty market 'GTA VI' should be rejected due to confidence penalty"
 
 
 def test_event_catalyst_no_closes_at():
