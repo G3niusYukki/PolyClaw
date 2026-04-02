@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from polyclaw.config import settings
 from polyclaw.domain import MarketSnapshot
 from polyclaw.strategies.base import BaseStrategy, Side, Signal
+from polyclaw.strategies.utils import calculate_liquidity_depth
 from polyclaw.timeutils import utcnow
 
 
@@ -24,9 +25,9 @@ class LiquidityMomentumStrategy(BaseStrategy):
     from the MarketRanker for momentum detection.
     """
 
-    strategy_id: str = 'liquidity_momentum'
-    name: str = 'Liquidity Momentum'
-    version: str = '1.0.0'
+    strategy_id: str = "liquidity_momentum"
+    name: str = "Liquidity Momentum"
+    version: str = "1.0.0"
 
     def __init__(self, config: LiquidityMomentumConfig | None = None) -> None:
         self.config = config or LiquidityMomentumConfig()
@@ -44,19 +45,19 @@ class LiquidityMomentumStrategy(BaseStrategy):
         momentum_score = self._momentum_score(market, volume_surge_ratio)
 
         return {
-            'volume_surge_ratio': volume_surge_ratio,
-            'liquidity_depth': liquidity_depth,
-            'price_momentum_24h': price_momentum_24h,
-            'spread_percentile': spread_percentile,
-            'momentum_score': momentum_score,
+            "volume_surge_ratio": volume_surge_ratio,
+            "liquidity_depth": liquidity_depth,
+            "price_momentum_24h": price_momentum_24h,
+            "spread_percentile": spread_percentile,
+            "momentum_score": momentum_score,
         }
 
     def generate_signals(self, market: MarketSnapshot, features: dict) -> Signal | None:
         """Generate signal for volume spike + breakout + sufficient depth."""
-        volume_surge = features.get('volume_surge_ratio', 0.0)
-        liquidity_depth = features.get('liquidity_depth', 0.0)
-        momentum_score = features.get('momentum_score', 0.0)
-        spread_pct = features.get('spread_percentile', 999)
+        volume_surge = features.get("volume_surge_ratio", 0.0)
+        liquidity_depth = features.get("liquidity_depth", 0.0)
+        momentum_score = features.get("momentum_score", 0.0)
+        spread_pct = features.get("spread_percentile", 999)
 
         # Check volume surge threshold
         if volume_surge < self.config.volume_surge_min:
@@ -105,9 +106,9 @@ class LiquidityMomentumStrategy(BaseStrategy):
             return None
 
         explanation = (
-            f'Liquidity Momentum: momentum_score={momentum_score:.3f}, '
-            f'volume_surge={volume_surge:.3f}, liquidity_depth=${liquidity_depth:.0f}, '
-            f'spread_pct={spread_pct:.0f}bps, confidence={confidence:.3f}, edge_bps={edge}.'
+            f"Liquidity Momentum: momentum_score={momentum_score:.3f}, "
+            f"volume_surge={volume_surge:.3f}, liquidity_depth=${liquidity_depth:.0f}, "
+            f"spread_pct={spread_pct:.0f}bps, confidence={confidence:.3f}, edge_bps={edge}."
         )
 
         return Signal(
@@ -117,11 +118,11 @@ class LiquidityMomentumStrategy(BaseStrategy):
             edge_bps=edge,
             explanation=explanation,
             features_used={
-                'volume_surge_ratio': round(volume_surge, 3),
-                'liquidity_depth': round(liquidity_depth, 2),
-                'price_momentum_24h': round(features.get('price_momentum_24h', 0.0), 3),
-                'spread_percentile': round(spread_pct, 1),
-                'momentum_score': round(momentum_score, 3),
+                "volume_surge_ratio": round(volume_surge, 3),
+                "liquidity_depth": round(liquidity_depth, 2),
+                "price_momentum_24h": round(features.get("price_momentum_24h", 0.0), 3),
+                "spread_percentile": round(spread_pct, 1),
+                "momentum_score": round(momentum_score, 3),
             },
         )
 
@@ -144,13 +145,7 @@ class LiquidityMomentumStrategy(BaseStrategy):
 
     def _liquidity_depth(self, market: MarketSnapshot) -> float:
         """Liquidity depth score — higher is better, capped at meaningful levels."""
-        if market.liquidity_usd >= 10000:
-            return market.liquidity_usd
-        elif market.liquidity_usd >= 3000:
-            return market.liquidity_usd * 0.7
-        elif market.liquidity_usd >= 1000:
-            return market.liquidity_usd * 0.3
-        return 0.0
+        return calculate_liquidity_depth(market.liquidity_usd)
 
     def _price_momentum_24h(self, market: MarketSnapshot) -> float:
         """Price momentum as deviation from neutral probability."""
