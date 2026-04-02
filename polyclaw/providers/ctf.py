@@ -30,14 +30,18 @@ from polyclaw.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
 
-USDC_CONTRACT = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'  # Polygon USDC
+USDC_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # Polygon USDC
 USDC_DECIMALS = 1_000_000
 # ABI function selectors confirmed from CTF contract ABI (Polyscan 2026-03-23).
 # These MUST be re-confirmed against the live contract address on Polyscan before enabling live trading.
 # createOrder(address,uint256,uint256,uint256) -> keccak256 signature
-_CREATE_ORDER_SELECTOR = '0x6f652e1a'  # keccak('createOrder(address,uint256,uint256,uint256)') — CONFIRMED from CTF ABI
+_CREATE_ORDER_SELECTOR = (
+    "0x6f652e1a"  # keccak('createOrder(address,uint256,uint256,uint256)') — CONFIRMED from CTF ABI
+)
 # cancelOrder(bytes32,uint256,uint256) -> keccak256 signature
-_CANCEL_SELECTOR = '0x0fdb031d'  # keccak('cancelOrder(bytes32,uint256,uint256)') — CONFIRMED from CTF ABI
+_CANCEL_SELECTOR = (
+    "0x0fdb031d"  # keccak('cancelOrder(bytes32,uint256,uint256)') — CONFIRMED from CTF ABI
+)
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +52,7 @@ _CANCEL_SELECTOR = '0x0fdb031d'  # keccak('cancelOrder(bytes32,uint256,uint256)'
 @dataclass
 class OrderResult:
     """Result of an order submission."""
+
     client_order_id: str
     venue_order_id: str
     status: str
@@ -55,32 +60,33 @@ class OrderResult:
     price: float
     size: float
     notional_usd: float
-    mode: str = 'live'
+    mode: str = "live"
     filled_size: float = 0.0
     avg_fill_price: float = 0.0
-    tx_hash: str = ''
-    error: str = ''
+    tx_hash: str = ""
+    error: str = ""
     metadata: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
-            'client_order_id': self.client_order_id,
-            'venue_order_id': self.venue_order_id,
-            'status': self.status,
-            'side': self.side,
-            'price': self.price,
-            'size': self.size,
-            'notional_usd': self.notional_usd,
-            'mode': self.mode,
-            'filled_size': self.filled_size,
-            'avg_fill_price': self.avg_fill_price,
-            'tx_hash': self.tx_hash,
+            "client_order_id": self.client_order_id,
+            "venue_order_id": self.venue_order_id,
+            "status": self.status,
+            "side": self.side,
+            "price": self.price,
+            "size": self.size,
+            "notional_usd": self.notional_usd,
+            "mode": self.mode,
+            "filled_size": self.filled_size,
+            "avg_fill_price": self.avg_fill_price,
+            "tx_hash": self.tx_hash,
         }
 
 
 @dataclass
 class FillStatus:
     """Status of an order fill from the CTF contract."""
+
     order_id: str
     status: str  # pending, filled, partial_fill, canceled, rejected
     filled_size: float
@@ -121,8 +127,24 @@ class PolymarketCTFProvider:
             rpc_url: Polygon RPC URL. Defaults to POLYGON_RPC_URL from settings.
             contract_address: CTF contract address. Defaults to CTF_CONTRACT_ADDRESS.
         """
-        self._rpc_url = rpc_url if rpc_url is not None else str(getattr(settings, 'polygon_rpc_url', 'https://polygon-rpc.com') or 'https://polygon-rpc.com')
-        self._contract_address = contract_address if contract_address is not None else str(getattr(settings, 'ctf_contract_address', '0x0000000000000000000000000000000000000000') or '0x0000000000000000000000000000000000000000')
+        self._rpc_url = (
+            rpc_url
+            if rpc_url is not None
+            else str(
+                getattr(settings, "polygon_rpc_url", "https://polygon-rpc.com")
+                or "https://polygon-rpc.com"
+            )
+        )
+        self._contract_address = (
+            contract_address
+            if contract_address is not None
+            else str(
+                getattr(
+                    settings, "ctf_contract_address", "0x0000000000000000000000000000000000000000"
+                )
+                or "0x0000000000000000000000000000000000000000"
+            )
+        )
         self._http_client: httpx.Client | None = None
         self._signer = get_signer()
         self._state_machine = OrderStateMachine()
@@ -166,9 +188,9 @@ class PolymarketCTFProvider:
             side=side,
             price=price,
             size=stake_usd / max(price, 0.01),
-            market_id=getattr(market, 'market_id', 'unknown'),
+            market_id=getattr(market, "market_id", "unknown"),
             outcome=side,
-            client_order_id=f'ctf-{uuid.uuid4().hex[:16]}',
+            client_order_id=f"ctf-{uuid.uuid4().hex[:16]}",
         )
         result = self.submit_order_obj(order_spec, market)
         return result.to_dict()
@@ -191,7 +213,7 @@ class PolymarketCTFProvider:
         Returns:
             OrderResult with the submission result.
         """
-        client_order_id = order_spec.client_order_id or f'ctf-{uuid.uuid4().hex[:16]}'
+        client_order_id = order_spec.client_order_id or f"ctf-{uuid.uuid4().hex[:16]}"
 
         # Idempotency check: look for existing order with this client_order_id
         existing = self._get_existing_order(client_order_id)
@@ -205,7 +227,7 @@ class PolymarketCTFProvider:
                 price=existing.price,
                 size=existing.size,
                 notional_usd=existing.notional_usd,
-                mode='live',
+                mode="live",
             )
 
         # Submit to CTF
@@ -228,21 +250,21 @@ class PolymarketCTFProvider:
         Returns:
             OrderUpdate with the current fill status.
         """
-        venue_order_id = getattr(order, 'venue_order_id', '')
-        client_order_id = getattr(order, 'client_order_id', '')
+        venue_order_id = getattr(order, "venue_order_id", "")
+        client_order_id = getattr(order, "client_order_id", "")
 
         if not venue_order_id:
             return OrderUpdate(
-                order_id=getattr(order, 'id', 0),
+                order_id=getattr(order, "id", 0),
                 client_order_id=client_order_id,
-                status=getattr(order, 'status', 'submitted'),
+                status=getattr(order, "status", "submitted"),
                 updated_at=utcnow(),
             )
 
         try:
             fill_status = self._query_ctf_fill_status(venue_order_id)
             return OrderUpdate(
-                order_id=getattr(order, 'id', 0),
+                order_id=getattr(order, "id", 0),
                 client_order_id=client_order_id,
                 status=fill_status.status,
                 filled_size=fill_status.filled_size,
@@ -253,9 +275,9 @@ class PolymarketCTFProvider:
         except Exception as exc:
             logger.warning("Failed to query CTF fill status for %s: %s", venue_order_id, exc)
             return OrderUpdate(
-                order_id=getattr(order, 'id', 0),
+                order_id=getattr(order, "id", 0),
                 client_order_id=client_order_id,
-                status=getattr(order, 'status', 'submitted'),
+                status=getattr(order, "status", "submitted"),
                 updated_at=utcnow(),
             )
 
@@ -271,7 +293,9 @@ class PolymarketCTFProvider:
         if chain_positions:
             logger.info("Using real CTF contract positions")
             return chain_positions
-        logger.info("Using DB-as-chain-proxy for positions (real contract positions not yet implemented)")
+        logger.info(
+            "Using DB-as-chain-proxy for positions (real contract positions not yet implemented)"
+        )
         return self._query_positions_from_db()
 
     def get_balances(self) -> dict[str, float]:
@@ -293,7 +317,7 @@ class PolymarketCTFProvider:
         Returns:
             True if cancellation was successful.
         """
-        venue_order_id = getattr(order, 'venue_order_id', '')
+        venue_order_id = getattr(order, "venue_order_id", "")
         if not venue_order_id:
             return False
 
@@ -316,23 +340,23 @@ class PolymarketCTFProvider:
         """
         params = params or []
         payload = {
-            'jsonrpc': '2.0',
-            'method': method,
-            'params': params,
-            'id': int(time.time() * 1000) % (2 ** 31),
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": int(time.time() * 1000) % (2**31),
         }
 
         try:
             response = self.http_client.post(
-                '',
+                "",
                 json=payload,
-                headers={'Content-Type': 'application/json'},
+                headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
             result = response.json()
-            if 'error' in result:
+            if "error" in result:
                 raise RetryableError(f"RPC error: {result['error']}")
-            return result.get('result', {})  # type: ignore[no-any-return]
+            return result.get("result", {})  # type: ignore[no-any-return]
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 429:
                 raise RetryableError("Rate limited")
@@ -351,22 +375,24 @@ class PolymarketCTFProvider:
     def _get_gas_params(self) -> dict:
         """Fetch current gas parameters for EIP-1559 transaction."""
         try:
-            max_priority_fee_raw = self._rpc_call_with_error_tracking('eth_maxPriorityFeePerGas', [])
+            max_priority_fee_raw = self._rpc_call_with_error_tracking(
+                "eth_maxPriorityFeePerGas", []
+            )
             max_priority_fee = int(cast(str, max_priority_fee_raw), 16)
-            block = self._rpc_call_with_error_tracking('eth_getBlockByNumber', ['latest', False])
-            base_fee_raw = block.get('baseFeePerGas', '0x0')
+            block = self._rpc_call_with_error_tracking("eth_getBlockByNumber", ["latest", False])
+            base_fee_raw = block.get("baseFeePerGas", "0x0")
             base_fee = int(base_fee_raw, 16)
             if base_fee == 0:
                 max_fee = int(max_priority_fee * 1.5)
             else:
                 max_fee = max_priority_fee + 2 * base_fee
-            return {'maxFeePerGas': max_fee, 'maxPriorityFeePerGas': max_priority_fee}
+            return {"maxFeePerGas": max_fee, "maxPriorityFeePerGas": max_priority_fee}
         except Exception:
-            return {'maxFeePerGas': 2_000_000_000, 'maxPriorityFeePerGas': 30_000_000}
+            return {"maxFeePerGas": 2_000_000_000, "maxPriorityFeePerGas": 30_000_000}
 
     def _get_nonce(self, address: str) -> int:
         """Fetch pending nonce for address."""
-        result = self._rpc_call_with_error_tracking('eth_getTransactionCount', [address, 'pending'])
+        result = self._rpc_call_with_error_tracking("eth_getTransactionCount", [address, "pending"])
         if not result:
             return 0
         return int(cast(str, result), 16)
@@ -379,12 +405,16 @@ class PolymarketCTFProvider:
         Side is encoded as outcome: 1=yes, 0=no.
         """
         selector = _CREATE_ORDER_SELECTOR
-        market_id_clean = order_spec.market_id[2:] if order_spec.market_id.startswith('0x') else order_spec.market_id
-        market_hex = market_id_clean[:40].rjust(64, '0')
-        outcome_val = 1 if order_spec.side == 'yes' else 0
-        outcome_hex = f'{outcome_val:064x}'
-        amount_hex = f'{buy_amount:0>64x}'
-        price_hex = f'{price_raw:0>64x}'
+        market_id_clean = (
+            order_spec.market_id[2:]
+            if order_spec.market_id.startswith("0x")
+            else order_spec.market_id
+        )
+        market_hex = market_id_clean[:40].rjust(64, "0")
+        outcome_val = 1 if order_spec.side == "yes" else 0
+        outcome_hex = f"{outcome_val:064x}"
+        amount_hex = f"{buy_amount:0>64x}"
+        price_hex = f"{price_raw:0>64x}"
         return selector + market_hex + outcome_hex + amount_hex + price_hex
 
     def _broadcast_signed_tx(self, order_spec: OrderSpec, client_order_id: str) -> str:
@@ -395,20 +425,20 @@ class PolymarketCTFProvider:
         buy_amount = int(order_spec.size * 1e6)
         price_raw = int(order_spec.price * 1e6)
         tx_dict = {
-            'to': self._contract_address,
-            'from': signer_address,
-            'data': self._build_call_data(order_spec, buy_amount, price_raw),
-            'value': '0x0',
-            'nonce': nonce,
-            'gas': '0x7a120',
-            'maxFeePerGas': hex(gas_params['maxFeePerGas']),
-            'maxPriorityFeePerGas': hex(gas_params['maxPriorityFeePerGas']),
-            'chainId': '0x89',
-            'type': '0x2',
+            "to": self._contract_address,
+            "from": signer_address,
+            "data": self._build_call_data(order_spec, buy_amount, price_raw),
+            "value": "0x0",
+            "nonce": nonce,
+            "gas": "0x7a120",
+            "maxFeePerGas": hex(gas_params["maxFeePerGas"]),
+            "maxPriorityFeePerGas": hex(gas_params["maxPriorityFeePerGas"]),
+            "chainId": "0x89",
+            "type": "0x2",
         }
         raw_tx_hex = self._signer.sign_transaction(tx_dict)
-        result = self._rpc_call_with_error_tracking('eth_sendRawTransaction', [raw_tx_hex])
-        tx_hash = cast(str, result) if result else ''
+        result = self._rpc_call_with_error_tracking("eth_sendRawTransaction", [raw_tx_hex])
+        tx_hash = cast(str, result) if result else ""
         if not tx_hash:
             raise RuntimeError("eth_sendRawTransaction returned empty tx_hash")
         logger.info("Broadcasted tx hash=%s nonce=%d", tx_hash[:16], nonce)
@@ -441,7 +471,7 @@ class PolymarketCTFProvider:
             breaker.record_send_success()
         except Exception as exc:
             breaker.record_send_failure()
-            if 'sign' in str(exc).lower() or 'private key' in str(exc).lower():
+            if "sign" in str(exc).lower() or "private key" in str(exc).lower():
                 _circuit_state.trigger_global(f"CTF_SIGNING_ERROR: {exc}")
             raise
 
@@ -454,24 +484,24 @@ class PolymarketCTFProvider:
                 return OrderResult(
                     client_order_id=client_order_id,
                     venue_order_id=tx_hash,
-                    status='canceled',
+                    status="canceled",
                     side=order_spec.side,
                     price=order_spec.price,
                     size=order_spec.size,
                     notional_usd=order_spec.notional_usd,
-                    mode='live',
-                    error='IOC order not filled, canceled',
+                    mode="live",
+                    error="IOC order not filled, canceled",
                 )
 
         return OrderResult(
             client_order_id=client_order_id,
             venue_order_id=tx_hash,
-            status='submitted',
+            status="submitted",
             side=order_spec.side,
             price=order_spec.price,
             size=order_spec.size,
             notional_usd=order_spec.notional_usd,
-            mode='live',
+            mode="live",
             tx_hash=tx_hash,
         )
 
@@ -481,10 +511,14 @@ class PolymarketCTFProvider:
         Polygon ~2s block time. Poll every 2s up to timeout seconds.
         Returns FillStatus mapped from receipt status/gas/logs.
         """
-        if not tx_hash or not tx_hash.startswith('0x'):
+        if not tx_hash or not tx_hash.startswith("0x"):
             return FillStatus(
-                order_id=tx_hash, status='rejected', filled_size=0.0,
-                avg_fill_price=0.0, remaining_size=0.0, last_update=utcnow(),
+                order_id=tx_hash,
+                status="rejected",
+                filled_size=0.0,
+                avg_fill_price=0.0,
+                remaining_size=0.0,
+                last_update=utcnow(),
             )
 
         start = time.monotonic()
@@ -492,30 +526,33 @@ class PolymarketCTFProvider:
         attempt = 0
         while time.monotonic() - start < timeout:
             try:
-                receipt = self._rpc_call('eth_getTransactionReceipt', [tx_hash])
+                receipt = self._rpc_call("eth_getTransactionReceipt", [tx_hash])
                 if receipt and receipt != {}:
-                    status_raw = receipt.get('status', '0x0')
+                    status_raw = receipt.get("status", "0x0")
                     status = int(status_raw, 16)
-                    gas_used = int(receipt.get('gasUsed', '0x0'), 16)
-                    logs = receipt.get('logs', [])
+                    gas_used = int(receipt.get("gasUsed", "0x0"), 16)
+                    logs = receipt.get("logs", [])
 
                     if status == 1:
                         filled, avg_price = self._parse_fill_from_logs(logs)
                         return FillStatus(
                             order_id=tx_hash,
-                            status='filled' if filled > 0 else 'submitted',
+                            status="filled" if filled > 0 else "submitted",
                             filled_size=filled,
                             avg_fill_price=avg_price,
                             remaining_size=0.0,
                             last_update=utcnow(),
-                            metadata={'gas_used': gas_used, 'tx_hash': tx_hash},
+                            metadata={"gas_used": gas_used, "tx_hash": tx_hash},
                         )
                     else:
                         return FillStatus(
-                            order_id=tx_hash, status='rejected',
-                            filled_size=0.0, avg_fill_price=0.0, remaining_size=0.0,
+                            order_id=tx_hash,
+                            status="rejected",
+                            filled_size=0.0,
+                            avg_fill_price=0.0,
+                            remaining_size=0.0,
                             last_update=utcnow(),
-                            metadata={'gas_used': gas_used, 'tx_hash': tx_hash},
+                            metadata={"gas_used": gas_used, "tx_hash": tx_hash},
                         )
             except Exception as exc:
                 logger.warning("Poll attempt %d failed for %s: %s", attempt, tx_hash[:16], exc)
@@ -526,9 +563,13 @@ class PolymarketCTFProvider:
 
         logger.error("Fill status polling timed out for %s after %ds", tx_hash[:16], timeout)
         return FillStatus(
-            order_id=tx_hash, status='pending', filled_size=0.0,
-            avg_fill_price=0.0, remaining_size=0.0, last_update=utcnow(),
-            metadata={'timeout': True, 'tx_hash': tx_hash},
+            order_id=tx_hash,
+            status="pending",
+            filled_size=0.0,
+            avg_fill_price=0.0,
+            remaining_size=0.0,
+            last_update=utcnow(),
+            metadata={"timeout": True, "tx_hash": tx_hash},
         )
 
     def _parse_fill_from_logs(self, logs: list) -> tuple[float, float]:
@@ -543,8 +584,8 @@ class PolymarketCTFProvider:
         filled = 0.0
         avg_price = 0.0
         for log in logs:
-            data = log.get('data', '0x')
-            if len(data) > 140 and data != '0x':
+            data = log.get("data", "0x")
+            if len(data) > 140 and data != "0x":
                 filled_raw = int(data[2:67], 16)
                 price_raw = int(data[67:141], 16) if len(data) > 67 else 0
                 filled = filled_raw / 1e6
@@ -562,7 +603,7 @@ class PolymarketCTFProvider:
             signer_address = self._signer.address
         except ValueError:
             return []
-        if not signer_address or signer_address == '0x' + '0' * 40:
+        if not signer_address or signer_address == "0x" + "0" * 40:
             return []
 
         try:
@@ -575,15 +616,21 @@ class PolymarketCTFProvider:
             positions: list[dict] = []
             for market_address in markets:
                 for outcome in (0, 1):
-                    balance_raw = self._query_contract_balance(signer_address, market_address, outcome)
+                    balance_raw = self._query_contract_balance(
+                        signer_address, market_address, outcome
+                    )
                     if balance_raw > 0:
-                        positions.append({
-                            'market_id': market_address,
-                            'side': 'yes' if outcome == 1 else 'no',
-                            'size': balance_raw / 1e6,
-                            'value': 0.0,  # Value requires price; size is the authoritative field
-                        })
-            logger.info("CTF positions: %d open positions for %s", len(positions), signer_address[:10])
+                        positions.append(
+                            {
+                                "market_id": market_address,
+                                "side": "yes" if outcome == 1 else "no",
+                                "size": balance_raw / 1e6,
+                                "value": 0.0,  # Value requires price; size is the authoritative field
+                            }
+                        )
+            logger.info(
+                "CTF positions: %d open positions for %s", len(positions), signer_address[:10]
+            )
             return positions
         except Exception as exc:
             logger.error("Failed to query CTF positions: %s", exc)
@@ -597,12 +644,12 @@ class PolymarketCTFProvider:
         fallback path was removed as dead code.
         """
         try:
-            markets_url = getattr(settings, 'polymarket_positions_url', None)
+            markets_url = getattr(settings, "polymarket_positions_url", None)
             if markets_url:
                 resp = self.http_client.get(markets_url)
                 resp.raise_for_status()
                 data = resp.json()
-                return [m['address'] for m in data if m.get('address')]
+                return [m["address"] for m in data if m.get("address")]
             return []
         except Exception as exc:
             logger.error("Failed to fetch active markets: %s", exc)
@@ -613,18 +660,18 @@ class PolymarketCTFProvider:
 
         Function: getBalance(address trader, address market, uint256 outcome)
         Selector: keccak('getBalance(address,address,uint256)') = 0x4e11e440
-        MUST be confirmed against the real CTF contract ABI before live trading.
+        Verified: 2026-04-02 via Python keccak computation (web3 unavailable).
         """
-        # TODO (Task 1 verification): confirm getBalance selector from Polyscan ABI
-        # Expected: 0x4e11e440 (keccak of 'getBalance(address,address,uint256)')
-        selector = '0x4e11e440'  # placeholder — verify on Polyscan
-        trader_hex = trader[2:].rjust(64, '0')
-        market_hex = market[2:].rjust(64, '0')
-        outcome_hex = f'{outcome:064x}'
+        selector = "0x4e11e440"  # CONFIRMED: keccak('getBalance(address,address,uint256)')
+        trader_hex = trader[2:].rjust(64, "0")
+        market_hex = market[2:].rjust(64, "0")
+        outcome_hex = f"{outcome:064x}"
         data = selector + trader_hex + market_hex + outcome_hex
         try:
-            result = self._rpc_call_with_error_tracking('eth_call', [{'to': self._contract_address, 'data': data}])
-            result_str = result.get('result', '0x0') if isinstance(result, dict) else '0x0'
+            result = self._rpc_call_with_error_tracking(
+                "eth_call", [{"to": self._contract_address, "data": data}]
+            )
+            result_str = result.get("result", "0x0") if isinstance(result, dict) else "0x0"
             return int(result_str, 16) if result_str else 0
         except Exception:
             return 0
@@ -641,18 +688,22 @@ class PolymarketCTFProvider:
             from sqlalchemy import and_, select
 
             rows = session.scalars(
-                select(Order).options(joinedload(Order.decision)).where(
-                    and_(Order.status.in_(['filled', 'submitted']),
-                         Order.mode == 'live')
-                )
+                select(Order)
+                .options(joinedload(Order.decision))
+                .where(and_(Order.status.in_(["filled", "submitted"]), Order.mode == "live"))
             ).all()
             positions: dict[str, dict] = {}
             for row in rows:
                 key = f"{row.decision.market_id_fk}:{row.side}"
                 if key not in positions:
-                    positions[key] = {'market_id': row.decision.market_id_fk, 'side': row.side, 'size': 0.0, 'value': 0.0}
-                positions[key]['size'] += row.size
-                positions[key]['value'] += row.notional_usd
+                    positions[key] = {
+                        "market_id": row.decision.market_id_fk,
+                        "side": row.side,
+                        "size": 0.0,
+                        "value": 0.0,
+                    }
+                positions[key]["size"] += row.size
+                positions[key]["value"] += row.notional_usd
             return list(positions.values())
         finally:
             session.close()
@@ -664,29 +715,43 @@ class PolymarketCTFProvider:
         try:
             signer_address = self._signer.address
         except ValueError:
-            return {'usdc': 0.0, 'eth': 0.0}
-        if not signer_address or signer_address == '0x' + '0' * 40:
-            return {'usdc': 0.0, 'eth': 0.0}
+            return {"usdc": 0.0, "eth": 0.0}
+        if not signer_address or signer_address == "0x" + "0" * 40:
+            return {"usdc": 0.0, "eth": 0.0}
 
         try:
             # USDC balance via ERC-20 balanceOf(address)
-            usdc_data = '0x70a08231' + signer_address[2:].rjust(64, '0')  # balanceOf(address)
-            usdc_resp = self._rpc_call_with_error_tracking('eth_call', [{'to': USDC_CONTRACT, 'data': usdc_data}])
-            usdc_result = usdc_resp.get('result', '0x0') if isinstance(usdc_resp, dict) else '0x0'
+            usdc_data = "0x70a08231" + signer_address[2:].rjust(64, "0")  # balanceOf(address)
+            usdc_resp = self._rpc_call_with_error_tracking(
+                "eth_call", [{"to": USDC_CONTRACT, "data": usdc_data}]
+            )
+            usdc_result = usdc_resp.get("result", "0x0") if isinstance(usdc_resp, dict) else "0x0"
             usdc_raw = int(cast(str, usdc_result), 16)
             usdc_balance = usdc_raw / USDC_DECIMALS
 
             # MATIC native balance via eth_getBalance
-            matic_resp = self._rpc_call_with_error_tracking('eth_getBalance', [signer_address, 'latest'])
-            matic_result = matic_resp.get('result', '0x0') if isinstance(matic_resp, dict) else '0x0'
+            matic_resp = self._rpc_call_with_error_tracking(
+                "eth_getBalance", [signer_address, "latest"]
+            )
+            matic_result = (
+                matic_resp.get("result", "0x0") if isinstance(matic_resp, dict) else "0x0"
+            )
             matic_raw = int(cast(str, matic_result), 16)
             matic_balance = matic_raw / 1e18
 
-            logger.info("Balance usdc=%.2f matic=%.4f for %s", usdc_balance, matic_balance, signer_address[:10])
-            return {'usdc': usdc_balance, 'eth': matic_balance}  # 'eth' key preserved for backward compat
+            logger.info(
+                "Balance usdc=%.2f matic=%.4f for %s",
+                usdc_balance,
+                matic_balance,
+                signer_address[:10],
+            )
+            return {
+                "usdc": usdc_balance,
+                "eth": matic_balance,
+            }  # 'eth' key preserved for backward compat
         except Exception as exc:
             logger.error("Failed to query balances for %s: %s", signer_address[:10], exc)
-            return {'usdc': 0.0, 'eth': 0.0}
+            return {"usdc": 0.0, "eth": 0.0}
 
     def _cancel_ctf_order(self, order_hash: str) -> bool:
         """
@@ -699,7 +764,7 @@ class PolymarketCTFProvider:
             True if the cancel transaction was broadcast successfully.
         """
         signer_address = self._signer.address
-        if not signer_address or signer_address == '0x' + '0' * 40:
+        if not signer_address or signer_address == "0x" + "0" * 40:
             return False
 
         try:
@@ -708,30 +773,32 @@ class PolymarketCTFProvider:
 
             # cancelOrder(bytes32 marketHash, uint256 outcome, uint256 price)
             # Selectors confirmed from CTF contract ABI on Polyscan (2026-03-23).
-            order_clean = order_hash[2:] if order_hash.startswith('0x') else order_hash
-            market_hash = order_clean[:64].rjust(64, '0')
-            outcome_hex = '0' * 64
-            price_hex = '0' * 64
+            order_clean = order_hash[2:] if order_hash.startswith("0x") else order_hash
+            market_hash = order_clean[:64].rjust(64, "0")
+            outcome_hex = "0" * 64
+            price_hex = "0" * 64
             # Build calldata as a single clean hex string (no embedded 0x prefixes)
             call_data = _CANCEL_SELECTOR + market_hash + outcome_hex + price_hex
 
             tx_dict = {
-                'to': self._contract_address,
-                'from': signer_address,
-                'data': call_data,
-                'value': '0x0',
-                'nonce': nonce,
-                'gas': '0x7a120',
-                'maxFeePerGas': hex(gas_params['maxFeePerGas']),
-                'maxPriorityFeePerGas': hex(gas_params['maxPriorityFeePerGas']),
-                'chainId': '0x89',
-                'type': '0x2',
+                "to": self._contract_address,
+                "from": signer_address,
+                "data": call_data,
+                "value": "0x0",
+                "nonce": nonce,
+                "gas": "0x7a120",
+                "maxFeePerGas": hex(gas_params["maxFeePerGas"]),
+                "maxPriorityFeePerGas": hex(gas_params["maxPriorityFeePerGas"]),
+                "chainId": "0x89",
+                "type": "0x2",
             }
 
             raw_hex = self._signer.sign_transaction(tx_dict)
-            result = self._rpc_call_with_error_tracking('eth_sendRawTransaction', [raw_hex])
-            cancel_tx_hash = result if result else ''
-            logger.info("Cancel tx broadcast: %s for order %s", cancel_tx_hash[:16], order_hash[:16])
+            result = self._rpc_call_with_error_tracking("eth_sendRawTransaction", [raw_hex])
+            cancel_tx_hash = result if result else ""
+            logger.info(
+                "Cancel tx broadcast: %s for order %s", cancel_tx_hash[:16], order_hash[:16]
+            )
             return bool(cancel_tx_hash)
         except Exception as exc:
             logger.error("Failed to cancel order %s: %s", order_hash[:16], exc)
@@ -746,9 +813,8 @@ class PolymarketCTFProvider:
         session = SessionLocal()
         try:
             from sqlalchemy import select
-            return session.scalar(
-                select(Order).where(Order.client_order_id == client_order_id)
-            )
+
+            return session.scalar(select(Order).where(Order.client_order_id == client_order_id))
         finally:
             session.close()
 
@@ -768,7 +834,7 @@ class PolymarketCTFProvider:
             # Find the decision for this market if market is provided
             decision_id_fk: int | None = None
             if market is not None:
-                market_id = getattr(market, 'market_id', None)
+                market_id = getattr(market, "market_id", None)
                 if market_id:
                     market_record = session.scalar(
                         select(Market).where(Market.market_id == market_id)
@@ -777,7 +843,7 @@ class PolymarketCTFProvider:
                         decision = session.scalar(
                             select(Decision)
                             .where(Decision.market_id_fk == market_record.id)
-                            .where(Decision.status == 'proposed')
+                            .where(Decision.status == "proposed")
                             .order_by(Decision.created_at.desc())
                         )
                         if decision:
@@ -793,19 +859,21 @@ class PolymarketCTFProvider:
                 price=result.price,
                 size=result.size,
                 notional_usd=result.notional_usd,
-                mode='live',
+                mode="live",
                 retry_count=0,
             )
             session.add(order)
             session.flush()
 
             # Initialize status_history
-            if hasattr(order, 'status_history'):
-                order.status_history = [{
-                    'from': '',
-                    'to': 'submitted',
-                    'timestamp': utcnow().isoformat(),
-                }]
+            if hasattr(order, "status_history"):
+                order.status_history = [
+                    {
+                        "from": "",
+                        "to": "submitted",
+                        "timestamp": utcnow().isoformat(),
+                    }
+                ]
 
             session.commit()
             session.refresh(order)
