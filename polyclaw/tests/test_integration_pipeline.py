@@ -32,9 +32,9 @@ class TestTradingPipeline:
 
     def test_runner_tick_with_mock_markets(self, db_session, mock_market):
         """Test complete pipeline from market scan to decision creation."""
-        from polyclaw.providers.sample_market import SampleMarketProvider
+        from polyclaw.providers.polymarket_gamma import PolymarketGammaProvider
 
-        with patch.object(SampleMarketProvider, "list_markets", return_value=[mock_market]):
+        with patch.object(PolymarketGammaProvider, "list_markets", return_value=[mock_market]):
             runner = RunnerService()
 
             result = runner.tick(session=db_session)
