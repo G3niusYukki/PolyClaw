@@ -3,6 +3,7 @@ from threading import Lock
 
 from polyclaw.domain import MarketSnapshot
 from polyclaw.strategies.base import BaseStrategy
+from polyclaw.strategies.utils import calculate_liquidity_depth
 
 
 class FeatureCache:
@@ -57,7 +58,7 @@ class FeatureEngine:
         Returns:
             Dictionary mapping strategy_id -> {common_features + strategy_features}.
         """
-        cache_key = f'features:{market.market_id}'
+        cache_key = f"features:{market.market_id}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
@@ -88,20 +89,11 @@ class FeatureEngine:
         """
         # Volume surge ratio
         volume_surge_ratio = (
-            market.volume_24h_usd / market.liquidity_usd
-            if market.liquidity_usd > 0
-            else 0.0
+            market.volume_24h_usd / market.liquidity_usd if market.liquidity_usd > 0 else 0.0
         )
 
         # Liquidity depth (similar to ranking logic)
-        if market.liquidity_usd >= 10000:
-            liquidity_depth = market.liquidity_usd
-        elif market.liquidity_usd >= 3000:
-            liquidity_depth = market.liquidity_usd * 0.7
-        elif market.liquidity_usd >= 1000:
-            liquidity_depth = market.liquidity_usd * 0.3
-        else:
-            liquidity_depth = 0.0
+        liquidity_depth = calculate_liquidity_depth(market.liquidity_usd)
 
         # Price momentum (deviation from neutral 0.5)
         price_momentum_24h = abs(market.yes_price - 0.5) * 2
@@ -110,15 +102,15 @@ class FeatureEngine:
         spread_percentile = float(market.spread_bps)
 
         return {
-            'volume_surge_ratio': round(volume_surge_ratio, 4),
-            'liquidity_depth': round(liquidity_depth, 2),
-            'price_momentum_24h': round(price_momentum_24h, 4),
-            'spread_percentile': round(spread_percentile, 1),
+            "volume_surge_ratio": round(volume_surge_ratio, 4),
+            "liquidity_depth": round(liquidity_depth, 2),
+            "price_momentum_24h": round(price_momentum_24h, 4),
+            "spread_percentile": round(spread_percentile, 1),
         }
 
     def invalidate_cache(self, market_id: str) -> None:
         """Invalidate cached features for a specific market."""
-        self._cache.invalidate(f'features:{market_id}')
+        self._cache.invalidate(f"features:{market_id}")
 
     def clear_cache(self) -> None:
         """Clear all cached features."""
