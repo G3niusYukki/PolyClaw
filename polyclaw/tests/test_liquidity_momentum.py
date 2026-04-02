@@ -41,8 +41,9 @@ def test_liquidity_momentum_compute_features(sample_market):
     assert features['volume_surge_ratio'] == pytest.approx(0.28, rel=0.01)
     # liquidity_depth = 25000 (>= 10000 tier)
     assert features['liquidity_depth'] == 25000.0
-    # price_momentum = abs(0.55 - 0.5) * 2 = 0.1
-    assert features['price_momentum_24h'] == pytest.approx(0.1)
+    # price_momentum = price_deviation * (1 + volume_ratio)
+    # = abs(0.55 - 0.5)*2 * (1 + 7000/25000) = 0.1 * 1.28 = 0.128
+    assert features['price_momentum_24h'] == pytest.approx(0.128, rel=0.01)
     assert features['spread_percentile'] == 100.0
 
 

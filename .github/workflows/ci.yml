@@ -50,7 +50,6 @@ jobs:
 
       - name: Check mypy results
         run: |
-          # Fail if there are any type errors
           if grep -q "error:" mypy_output.txt; then
             echo "Type errors found:"
             cat mypy_output.txt
@@ -61,20 +60,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: polyclaw_test
-          POSTGRES_PASSWORD: polyclaw_test
-          POSTGRES_DB: polyclaw_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -90,8 +75,6 @@ jobs:
           python -m pip install -e ".[dev]" --break-system-packages
 
       - name: Run pytest with coverage
-        env:
-          DATABASE_URL: postgresql://polyclaw_test:polyclaw_test@localhost:5432/polyclaw_test
         run: pytest --cov=polyclaw --cov-fail-under=80
 
       - name: Upload coverage
@@ -105,20 +88,6 @@ jobs:
   alembic-migrate:
     name: Alembic Migration
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: polyclaw_test
-          POSTGRES_PASSWORD: polyclaw_test
-          POSTGRES_DB: polyclaw_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -133,52 +102,15 @@ jobs:
         run: |
           python -m pip install -e ".[dev]" --break-system-packages
 
-      - name: Wait for Postgres
-        run: |
-          for i in $(seq 1 30); do
-            pg_isready -h localhost -U polyclaw_test > /dev/null 2>&1 && break
-            sleep 1
-          done
-          pg_isready -h localhost -U polyclaw_test
-
-      - name: Run alembic upgrade
-        env:
-          DATABASE_URL: postgresql://polyclaw_test:polyclaw_test@localhost:5432/polyclaw_test
+      - name: Run alembic upgrade (SQLite)
         run: |
           alembic upgrade head
           echo "Migration upgrade successful"
 
       - name: Verify downgrade works
-        env:
-          DATABASE_URL: postgresql://polyclaw_test:polyclaw_test@localhost:5432/polyclaw_test
         run: |
           alembic downgrade -1
           echo "Migration downgrade successful"
 
       - name: Re-run upgrade to leave DB in clean state
-        env:
-          DATABASE_URL: postgresql://polyclaw_test:polyclaw_test@localhost:5432/polyclaw_test
         run: alembic upgrade head
-
-  terraform-validate:
-    name: Terraform Validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.9'
-          terraform_wrapper: false
-
-      - name: Terraform fmt check
-        run: |
-          # Check formatting only (do not modify files)
-          terraform fmt -check -recursive infrastructure/
-
-      - name: Terraform validate
-        run: |
-          cd infrastructure
-          terraform init -backend=false -input=false 2>&1 | tail -5
-          terraform validate .

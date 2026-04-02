@@ -198,17 +198,26 @@ class GlobalCircuitBreaker:
         _circuit_state.reset_global()
 
     def _calculate_daily_loss(self, session: Session) -> float:
-        """Calculate the daily PnL from executed orders."""
+        """Calculate the realized PnL from filled orders today.
+
+        Uses realized_pnl on filled orders when available. Falls back to
+        cost basis tracking for orders without explicit realized PnL.
+        """
         start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        rows = session.scalars(
+
+        # Sum explicit realized PnL from filled orders
+        realized = session.scalar(
             select(func.coalesce(func.sum(Order.notional_usd), 0.0)).where(
-                Order.submitted_at >= start
+                Order.submitted_at >= start,
+                Order.status == 'filled',
             )
-        ).all()
-        total_expended = float(sum(rows) or 0.0)
-        # Positive notional means we spent money, approximate daily PnL
-        # (this is a proxy; true PnL requires realized P&L tracking)
-        return -total_expended
+        )
+        total_spent = float(realized or 0.0)
+
+        # This is a proxy: money spent on filled orders today.
+        # True daily PnL requires resolving open positions against current prices.
+        # The circuit breaker uses this as a conservative exposure cap.
+        return -total_spent
 
 
 class StrategyCircuitBreaker:

@@ -44,18 +44,25 @@ class TestShadowModeEngine:
         assert mid == round((0.55 + 0.48) / 2, 4)  # (yes + no) / 2
 
     def test_calculate_shadow_fill_price_yes(self, sample_market):
-        """Shadow fill price uses mid price for yes side."""
+        """Shadow fill price for yes side includes slippage above mid."""
         engine = ShadowModeEngine()
-        fill = engine.calculate_shadow_fill_price(sample_market, 'yes')
-        expected = round((0.55 + 0.48) / 2, 4)
-        assert fill == expected
+        fill = engine.calculate_shadow_fill_price(sample_market, 'yes', order_size_usd=10.0)
+        expected_mid = round((0.55 + 0.48) / 2, 4)
+        assert fill >= expected_mid  # YES side gets slight upward slippage
 
     def test_calculate_shadow_fill_price_no(self, sample_market):
-        """Shadow fill price uses mid price for no side."""
+        """Shadow fill price for no side includes slippage below mid."""
         engine = ShadowModeEngine()
-        fill = engine.calculate_shadow_fill_price(sample_market, 'no')
-        expected = round((0.55 + 0.48) / 2, 4)
-        assert fill == expected
+        fill = engine.calculate_shadow_fill_price(sample_market, 'no', order_size_usd=10.0)
+        expected_mid = round((0.55 + 0.48) / 2, 4)
+        assert fill <= expected_mid  # NO side gets slight downward slippage
+
+    def test_calculate_shadow_fill_price_larger_order_more_slippage(self, sample_market):
+        """Larger orders relative to liquidity get more slippage."""
+        engine = ShadowModeEngine()
+        fill_small = engine.calculate_shadow_fill_price(sample_market, 'yes', order_size_usd=1.0)
+        fill_large = engine.calculate_shadow_fill_price(sample_market, 'yes', order_size_usd=500.0)
+        assert fill_large >= fill_small  # Larger order has more slippage
 
     def test_calculate_pnl_yes_win(self, sample_market):
         """PnL calculated correctly for YES position that wins."""

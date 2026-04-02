@@ -168,6 +168,117 @@ class TradingStageRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class LLMEstimate(Base):
+    __tablename__ = 'llm_estimates'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id_fk: Mapped[int] = mapped_column(ForeignKey('markets.id'))
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    estimated_probability_yes: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    reasoning: Mapped[str] = mapped_column(Text, default='')
+    key_factors: Mapped[str] = mapped_column(Text, default='')
+    model: Mapped[str] = mapped_column(String(128), default='')
+    provider: Mapped[str] = mapped_column(String(64), default='')
+    raw_response: Mapped[str] = mapped_column(Text, default='')
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    market: Mapped['Market'] = relationship()
+
+
+class NewsArticleRecord(Base):
+    __tablename__ = 'news_articles'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id_fk: Mapped[int] = mapped_column(ForeignKey('markets.id'))
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    snippet: Mapped[str] = mapped_column(Text, default='')
+    source: Mapped[str] = mapped_column(String(128), default='')
+    url: Mapped[str] = mapped_column(String(512), default='')
+    published_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    market: Mapped['Market'] = relationship()
+
+
+class SentimentScore(Base):
+    __tablename__ = 'sentiment_scores'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    direction: Mapped[str] = mapped_column(String(16))
+    magnitude: Mapped[float] = mapped_column(Float)
+    adjusted_probability: Mapped[float] = mapped_column(Float)
+    articles_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    key_insights: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WalletTracking(Base):
+    __tablename__ = 'wallet_tracking'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    address: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(128), default='')
+    is_profitable: Mapped[bool] = mapped_column(Boolean, default=False)
+    total_pnl: Mapped[float] = mapped_column(Float, default=0.0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_active_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class OnChainPosition(Base):
+    __tablename__ = 'onchain_positions'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    wallet_address: Mapped[str] = mapped_column(String(128), index=True)
+    side: Mapped[str] = mapped_column(String(8))
+    size_usd: Mapped[float] = mapped_column(Float)
+    outcome_tokens: Mapped[float] = mapped_column(Float, default=0.0)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SmartMoneySignal(Base):
+    __tablename__ = 'smart_money_signals'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    signal_type: Mapped[str] = mapped_column(String(32))  # whale_position, tracked_wallet, unusual_activity
+    direction: Mapped[str] = mapped_column(String(8))
+    magnitude: Mapped[float] = mapped_column(Float)
+    details: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CrossPlatformPriceRecord(Base):
+    __tablename__ = 'cross_platform_prices'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    platform: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(512))
+    probability_yes: Mapped[float] = mapped_column(Float)
+    volume_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    url: Mapped[str] = mapped_column(String(512), default='')
+    similarity_score: Mapped[float] = mapped_column(Float, default=0.0)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ArbitrageOpportunity(Base):
+    __tablename__ = 'arbitrage_opportunities'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[str] = mapped_column(String(128), index=True)
+    discrepancy_bps: Mapped[int] = mapped_column(Integer)
+    polymarket_price: Mapped[float] = mapped_column(Float)
+    consensus_price: Mapped[float] = mapped_column(Float)
+    platforms_agreeing: Mapped[int] = mapped_column(Integer)
+    platform_list: Mapped[str] = mapped_column(String(256), default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class MarketWhitelistRecord(Base):
     __tablename__ = 'market_whitelist'
 

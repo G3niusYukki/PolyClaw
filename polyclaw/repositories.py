@@ -1,8 +1,13 @@
+from datetime import timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from polyclaw.config import settings
 from polyclaw.domain import DecisionProposal, EvidenceItem, MarketSnapshot
-from polyclaw.models import Decision, Evidence, Market, Order, Position
+from polyclaw.llm.parser import LLMProbabilityEstimate
+from polyclaw.models import Decision, Evidence, LLMEstimate, Market, Order, Position
+from polyclaw.timeutils import utcnow
 
 
 def upsert_market(session: Session, market: MarketSnapshot) -> Market:
@@ -49,3 +54,47 @@ def record_order_and_position(session: Session, market_record: Market, decision:
     decision.status = 'executed'
     session.flush()
     return order
+
+
+def save_llm_estimate(
+    session: Session,
+    estimate: LLMProbabilityEstimate,
+    market_record: Market,
+    token_count: int = 0,
+) -> LLMEstimate:
+    """Save an LLM probability estimate to the database."""
+    import json
+
+    row = LLMEstimate(
+        market_id_fk=market_record.id,
+        market_id=estimate.market_id,
+        estimated_probability_yes=estimate.estimated_probability_yes,
+        confidence=estimate.confidence,
+        reasoning=estimate.reasoning,
+        key_factors=json.dumps(estimate.key_factors),
+        model=estimate.model or settings.llm_model,
+        provider=settings.llm_provider,
+        raw_response=estimate.raw_response,
+        token_count=token_count,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_cached_llm_estimate(
+    session: Session,
+    market_id: str,
+    max_age_minutes: int | None = None,
+) -> LLMEstimate | None:
+    """Get the most recent LLM estimate for a market if not expired."""
+    if max_age_minutes is None:
+        max_age_minutes = settings.llm_cache_ttl_seconds // 60
+    cutoff = utcnow() - timedelta(minutes=max_age_minutes)
+    return session.scalar(
+        select(LLMEstimate)
+        .where(LLMEstimate.market_id == market_id)
+        .where(LLMEstimate.created_at > cutoff)
+        .order_by(LLMEstimate.created_at.desc())
+        .limit(1)
+    )

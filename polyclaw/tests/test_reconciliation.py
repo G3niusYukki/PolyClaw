@@ -428,7 +428,7 @@ class TestDriftAlerts:
         assert severity == DriftSeverity.CRITICAL
 
     def test_critical_triggers_notification(self, mock_session):
-        """CRITICAL alerts should call the notification service."""
+        """CRITICAL alerts should log at CRITICAL level."""
         alerts = DriftAlerts()
         report = ReconciliationReport(
             drift_detected=True,
@@ -448,16 +448,16 @@ class TestDriftAlerts:
             auto_close_count=0,
         )
 
-        with patch.object(alerts.notification_service, 'notify') as mock_notify:
+        with patch('polyclaw.reconciliation.alerts.logger') as mock_logger:
             severity = alerts.send_drift_alert(mock_session, report)
 
         assert severity == DriftSeverity.CRITICAL
-        mock_notify.assert_called_once()
-        call_args = mock_notify.call_args
-        assert call_args[1]['channel'] == 'reconciliation_alert'
+        mock_logger.critical.assert_called_once()
+        call_args = mock_logger.critical.call_args
+        assert 'RECONCILIATION DRIFT ALERT' in call_args[0][0]
 
     def test_warning_does_not_trigger_notification(self, mock_session):
-        """WARNING alerts should NOT call the notification service."""
+        """WARNING alerts should NOT log at CRITICAL level."""
         alerts = DriftAlerts()
         report = ReconciliationReport(
             drift_detected=True,
@@ -477,8 +477,8 @@ class TestDriftAlerts:
             auto_close_count=0,
         )
 
-        with patch.object(alerts.notification_service, 'notify') as mock_notify:
+        with patch('polyclaw.reconciliation.alerts.logger') as mock_logger:
             severity = alerts.send_drift_alert(mock_session, report)
 
         assert severity == DriftSeverity.WARNING
-        mock_notify.assert_not_called()
+        mock_logger.critical.assert_not_called()

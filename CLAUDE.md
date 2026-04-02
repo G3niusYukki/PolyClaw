@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyClaw is a guarded Polymarket auto-analysis and execution framework. It ingests prediction markets, scores opportunities with evidence and strategy engines, applies risk controls, and can create orders in paper or guarded live mode.
+PolyClaw is a multi-strategy Polymarket trading framework. It uses LLM probability estimation, news sentiment, on-chain smart money tracking, and cross-platform price comparison to find edges in prediction markets.
 
 **Default mode is paper trading.** Live execution is gated behind configuration and explicit safety controls.
 
@@ -22,7 +22,7 @@ uvicorn polyclaw.api.main:app --reload
 polyclaw tick
 
 # Run backtest with walk-forward validation
-polyclaw backtest --strategy event_catalyst
+polyclaw backtest --strategy llm_probability
 
 # Run all tests (skip live-only tests)
 pytest
@@ -49,11 +49,13 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 | Module | Purpose |
 |--------|---------|
 | `polyclaw/providers/` | Pluggable provider interfaces (MarketProvider, EvidenceProvider, ExecutionProvider) |
-| `polyclaw/providers/prerequisites.py` | `LiveTradingPrerequisites` — validates RPC, selectors, contract address, balances before enabling live mode |
-| `polyclaw/services/analysis.py` | Orchestrates scanning, ranking, evidence, strategies, and risk |
+| `polyclaw/providers/prerequisites.py` | `LiveTradingPrerequisites` — validates RPC, selectors, contract address, balances |
+| `polyclaw/services/analysis.py` | Orchestrates scanning, ranking, evidence, strategies, and risk; registers strategies based on config |
 | `polyclaw/services/runner.py` | Orchestrates full tick cycle (scan + execute-ready) |
 | `polyclaw/services/execution.py` | Handles order approval and execution dispatch |
-| `polyclaw/strategies/` | Multi-strategy framework: BaseStrategy, StrategyRegistry, EventCatalyst, LiquidityMomentum |
+| `polyclaw/llm/` | LLM integration: client.py (unified OpenAI/Anthropic), prompts.py, parser.py |
+| `polyclaw/data/` | Data fetchers: news_fetcher.py (Google News RSS), sentiment.py, onchain.py (Polygon RPC), cross_platform.py |
+| `polyclaw/strategies/` | Multi-strategy framework: BaseStrategy, StrategyRegistry, 6 strategies |
 | `polyclaw/strategies/features.py` | FeatureEngine with TTL caching for strategy features |
 | `polyclaw/backtest/` | Backtesting: BacktestRunner, SlippageModel, WalkForwardValidator, PerformanceReport |
 | `polyclaw/ranking.py` | MarketRanker — scores markets by liquidity, volume, spread, time to close |
@@ -62,31 +64,37 @@ providers -> analysis -> strategies -> risk -> order planner -> approval gate ->
 | `polyclaw/safety.py` | Kill switch, audit logging, GlobalCircuitBreaker, StrategyCircuitBreaker |
 | `polyclaw/ingestion/` | Data ingestion: MarketFetcher, OrderBookFetcher, TradeFetcher, BackfillRunner |
 | `polyclaw/execution/` | Execution package: OrderStateMachine, OrderType/OrderSpec, PriceBandValidator, RetryExecutor, OrderTracker, StagedPositionSizer, MarketWhitelist |
-| `polyclaw/shadow/` | Shadow mode: ShadowModeEngine, SignalAccuracyMonitor, ThresholdTuner, LiveTransitionManager |
+| `polyclaw/shadow/` | Shadow mode: ShadowModeEngine (with slippage model), SignalAccuracyMonitor, ThresholdTuner, LiveTransitionManager |
 | `polyclaw/reconciliation/` | Reconciliation: ReconciliationService, DiscrepancyDetector, DriftAlerts |
-| `polyclaw/monitoring/` | Observability: MetricsCollector, AlertRouter, TelegramChannel, PagerDutyChannel, PnLReporter, DailyReportGenerator, AnomalyDetector, HealthChecker |
-| `polyclaw/scaling/` | Scaling: ScalingManager, PerformanceEvaluator, MarketExpander, SlippageMonitor, FeeCalculator |
-| `polyclaw/dr/` | Disaster recovery: DisasterRecoveryManager (snapshot restore, replica switch, data integrity) |
+| `polyclaw/monitoring/` | Observability: MetricsCollector (logging-based), AlertRouter, TelegramChannel, PnLReporter, HealthChecker |
 | `polyclaw/workflow.py` | ProposalWorkflowService — persists proposals, manages statuses |
-| `polyclaw/repositories.py` | Data access layer (upsert_market, create_decision, record_order_and_position) |
-| `polyclaw/secrets.py` | AWS Secrets Manager client with env var fallback |
+| `polyclaw/repositories.py` | Data access layer (upsert_market, create_decision, save_llm_estimate, etc.) |
 | `polyclaw/api/main.py` | FastAPI application with all REST endpoints |
-| `alembic/` | Database migrations (Postgres/SQLite) |
-| `infrastructure/` | Terraform for AWS (RDS, S3, Lambda, EventBridge, ECS, ALB, Secrets, Grafana, CloudWatch Alarms, DR) |
+| `alembic/` | Database migrations (SQLite default, PostgreSQL compatible) |
+
+### Strategies
+
+| Strategy | File | Activation |
+|----------|------|-----------|
+| LLM Probability | `strategies/llm_probability.py` | `LLM_API_KEY` set |
+| News Catalyst | `strategies/news_catalyst.py` | `LLM_API_KEY` + `NEWS_FETCHER_ENABLED` |
+| Smart Money | `strategies/smart_money.py` | `LLM_API_KEY` + `ONCHAIN_TRACKING_ENABLED` |
+| Cross-Platform Arb | `strategies/cross_platform_arb.py` | `LLM_API_KEY` + `CROSS_PLATFORM_ENABLED` |
+| Event Catalyst | `strategies/event_catalyst.py` | Always available |
+| Liquidity Momentum | `strategies/liquidity_momentum.py` | Always available |
 
 ### Key Patterns
 
-- **Strategy Framework** — `strategies/base.py` defines `BaseStrategy` ABC; `strategies/registry.py` manages enabled strategies
+- **Strategy Framework** — `strategies/base.py` defines `BaseStrategy` ABC with `compute_features()` and `generate_signals()`; `strategies/registry.py` manages enabled strategies
+- **Signal Alignment** — advanced strategies (news, smart money) only fire when secondary signals agree with LLM baseline direction
 - **Provider Protocol** — `providers/base.py` defines `MarketProvider`, `EvidenceProvider`, `ExecutionProvider` protocols
 - **Service Layer** — `services/` modules orchestrate business logic
 - **Repository Pattern** — `repositories.py` wraps SQLAlchemy session operations
 - **Domain Dataclasses** — `domain.py` defines `MarketSnapshot`, `EvidenceItem`, `DecisionProposal`
-- **ORM Models** — `models.py` defines SQLAlchemy models (Market, Decision, Order, Position, AuditLog, ProposalRecord, ShadowResult, TradingStageRecord, MarketWhitelistRecord)
-- **Risk Hierarchy** — `risk/__init__.py` (market-level RiskEngine) → `risk/portfolio.py` (portfolio-level) → `safety.py` (circuit breakers)
-- **Execution Pipeline** — `execution/orders.py` (types) → `execution/price_bands.py` (validation) → `execution/retry.py` (retry) → `providers/ctf.py` (submission) → `execution/tracker.py` (tracking)
-- **Shadow Mode** — `shadow/mode.py` (simulate execution) → `shadow/accuracy.py` (track accuracy) → `shadow/tuning.py` (tune thresholds) → `shadow/transition.py` (go live)
-- **Monitoring Pipeline** — `metrics.py` (CloudWatch emission) → `alerts.py` (severity routing) → `channels.py` (Telegram/PagerDuty)
-- **Scaling Pipeline** — `evaluator.py` (performance criteria) → `manager.py` (stage control) → `expansion.py` (market whitelist expansion)
+- **ORM Models** — `models.py` defines all SQLAlchemy models (Market, Decision, Order, Position, LLMEstimate, NewsArticleRecord, SentimentScore, WalletTracking, OnChainPosition, SmartMoneySignal, CrossPlatformPriceRecord, ArbitrageOpportunity, etc.)
+- **LLM Client** — `llm/client.py` provides unified OpenAI/Anthropic interface with retry, rate limiting, and JSON extraction
+- **Shadow Fill** — `shadow/mode.py` simulates execution with slippage model based on order size vs liquidity
+- **Risk Hierarchy** — `risk/__init__.py` (market-level RiskEngine) -> `risk/portfolio.py` (portfolio-level) -> `safety.py` (circuit breakers)
 
 ## API Endpoints
 
@@ -128,44 +136,33 @@ The system has multiple safety layers. All default to conservative values:
 - `StrategyCircuitBreaker` — triggers on strategy DD >10%, auto-resets after 24h + manual review
 - `PriceBandValidator` — rejects orders >2% deviation from reference price
 - Risk engine rejects trades on stale data, low liquidity, excessive spread, exposure overflow
-- `LiveTradingPrerequisites` — validates RPC (`eth_blockNumber`), CTF selectors (`createOrder=0x6f652e1a`, `cancelOrder=0x0fdb031d`), contract address, and balances before enabling live mode; raises `PrerequisiteError` on failure
-- Reconciliation `can_trade_live()` — blocks live trading when Polymarket API or CTF chain positions are unavailable; guarded by `execution_mode != 'live'`
+- `LiveTradingPrerequisites` — validates RPC, CTF selectors, contract address, and balances before enabling live mode
+- Reconciliation `can_trade_live()` — blocks live trading when Polymarket API or CTF chain positions are unavailable
 - `MarketWhitelist` — default deny, only whitelisted markets eligible for live trading
-- `StagedPositionSizer` — live trading scales through stages (shadow → 10% → 25% → 50% → 100%)
-- Reconciliation auto-closes positions if drift >$10
+- `StagedPositionSizer` — live trading scales through stages (shadow -> 10% -> 25% -> 50% -> 100%)
 
 See `RISK_CONFIG.yaml` for default risk thresholds and `SAFETY_CHECKLIST.md` for pre-live checks.
 
 ## Configuration
 
 All settings come from environment variables (see `.env.example`). Key settings:
-- `DATABASE_URL` — SQLite dev default, Postgres for production (e.g., `postgresql://user:pass@host:5432/polyclaw`)
-- `MARKET_SOURCE=sample|polymarket` — data source toggle
-- `POLYMARKET_POSITIONS_URL` — CLOB endpoint for positions (default `https://clob.polymarket.com/positions`)
+- `DATABASE_URL` — SQLite dev default (`sqlite:///./polyclaw.db`), PostgreSQL for production
+- `MARKET_SOURCE=polymarket` — data source
 - `EXECUTION_MODE=paper|live` — execution mode
-- `REQUIRE_APPROVAL=true|false` — approval gate
-- `AUTO_EXECUTE=true|false` — auto-execute approved decisions
-- `LIVE_TRADING_ENABLED=true|false` — enable live trading
+- `LLM_PROVIDER=openai|anthropic` — LLM provider
+- `LLM_API_KEY` — API key for LLM strategies
+- `LLM_MODEL` — model to use (default: `gpt-4o`)
+- `NEWS_FETCHER_ENABLED` — enable news sentiment strategy
+- `ONCHAIN_TRACKING_ENABLED` — enable smart money strategy
+- `CROSS_PLATFORM_ENABLED` — enable cross-platform arbitrage
 - Risk thresholds: `MIN_CONFIDENCE`, `MIN_EDGE_BPS`, `MAX_SPREAD_BPS`, `MIN_LIQUIDITY_USD`, `MAX_TOTAL_EXPOSURE_USD`, `MAX_POSITION_USD`
 
-## Infrastructure
+## CI/CD
 
-Terraform configs in `infrastructure/` for AWS deployment:
-- `rds.tf` — RDS Postgres (db.t4g.medium)
-- `s3.tf` — Data buckets with lifecycle policies
-- `lambda.tf` + `lambda/ingestion/` — Lambda ingestion function
-- `eventbridge.tf` — 3-minute ingestion schedule
-- `secrets.tf` — AWS Secrets Manager for CTF keys, API keys, Telegram tokens
-- `ecs.tf` — ECS Fargate cluster (4 services: ingestion, strategy, execution, monitor)
-- `alb.tf` — Application Load Balancer with path-based routing
-- `ecs-task-iam.tf` — IAM roles for ECS task execution
-- `alarms.tf` — CloudWatch alarms (6 metrics) with SNS routing
-- `grafana.tf` — Grafana dashboard provisioning
-- `dr.tf` — Disaster recovery (cross-region S3 replication, RDS read replica)
-- `outputs.tf` — bucket names, RDS endpoint, VPC IDs
+GitHub Actions in `.github/workflows/ci.yml`:
+- **Lint** — ruff check
+- **Type Check** — mypy
+- **Test** — pytest with coverage >= 80%
+- **Alembic Migration** — upgrade/downgrade validation on SQLite
 
-CI/CD in `.github/workflows/`:
-- `ci.yml` — lint (ruff), type-check (mypy), test (pytest with coverage ≥80%), alembic migration, terraform validate
-- `deploy.yml` — Docker build to ECR, ECS task definition update, staging on main, production on release tag
-
-Docker: `Dockerfile` (multi-stage, non-root) and `docker-compose.yml` (polyclaw + postgres)
+Docker: `Dockerfile` (multi-stage, non-root) and `docker-compose.yml` (polyclaw with SQLite)

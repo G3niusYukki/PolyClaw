@@ -68,15 +68,38 @@ class ShadowModeEngine:
         no_price: float = getattr(market, 'no_price', None) or getattr(market, 'outcome_no_price', 0.0)  # type: ignore[assignment]
         return round((yes_price + no_price) / 2.0, 4)
 
-    def calculate_shadow_fill_price(self, market, side: str) -> float:
+    def calculate_shadow_fill_price(self, market, side: str, order_size_usd: float = 10.0) -> float:
         """
         Calculate the shadow fill price for a given market and side.
 
-        Uses the market mid price as the simulated fill price.
-        Works with both MarketSnapshot (domain) and Market (ORM) models.
+        Uses the market mid price plus a slippage estimate based on order size
+        relative to available liquidity.
+
+        Args:
+            market: MarketSnapshot or Market ORM object.
+            side: 'yes' or 'no'.
+            order_size_usd: Estimated order size in USD (used for slippage calc).
+
+        Returns:
+            Simulated fill price including slippage.
         """
         mid = self.get_mid_price(market)
-        return mid
+
+        # Estimate slippage based on order size vs liquidity
+        liquidity: float = getattr(market, 'liquidity_usd', 0.0)
+        if liquidity <= 0:
+            # No liquidity info — use conservative slippage
+            slippage_pct = 0.005  # 0.5%
+        else:
+            # Slippage increases with order size relative to liquidity
+            # Cap at 0.5% max
+            slippage_pct = min(0.005, order_size_usd / liquidity)
+
+        # Apply slippage: buying YES pushes price up, buying NO pushes it down
+        if side == 'yes':
+            return round(mid * (1 + slippage_pct), 4)
+        else:
+            return round(mid * (1 - slippage_pct), 4)
 
     def calculate_pnl(self, shadow_pos: ShadowPosition, outcome_price: float) -> float:
         """
@@ -149,8 +172,12 @@ def process_shadow_signals(
             )
             continue
 
-        # Calculate shadow fill price using mid price
-        shadow_fill_price = engine.calculate_shadow_fill_price(market, signal.side.value if hasattr(signal.side, 'value') else signal.side)
+        # Calculate shadow fill price with slippage model
+        shadow_fill_price = engine.calculate_shadow_fill_price(
+            market,
+            signal.side.value if hasattr(signal.side, 'value') else signal.side,
+            order_size_usd=signal.stake_usd,
+        )
 
         # Calculate quantity from stake and price
         side_str = signal.side.value if hasattr(signal.side, 'value') else signal.side

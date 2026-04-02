@@ -6,7 +6,6 @@ from typing import Any
 from eth_account import Account
 
 from polyclaw.config import settings
-from polyclaw.secrets import secrets_manager
 
 
 class WalletSigner:
@@ -16,7 +15,7 @@ class WalletSigner:
         if private_key:
             self._private_key = private_key
         else:
-            self._private_key = secrets_manager.get_ctf_private_key()
+            self._private_key = getattr(settings, 'ctf_private_key', '') or ''
         self._account = None
         if self._private_key:
             try:

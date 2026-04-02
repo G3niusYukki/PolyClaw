@@ -148,8 +148,16 @@ class LiquidityMomentumStrategy(BaseStrategy):
         return calculate_liquidity_depth(market.liquidity_usd)
 
     def _price_momentum_24h(self, market: MarketSnapshot) -> float:
-        """Price momentum as deviation from neutral probability."""
-        return abs(market.yes_price - 0.5) * 2
+        """Price momentum proxy using volume-weighted price deviation.
+
+        Since we lack historical price snapshots, this uses the volume-to-liquidity
+        ratio as a momentum amplifier: high volume + price away from 0.5 = momentum.
+        """
+        price_deviation = abs(market.yes_price - 0.5) * 2
+        volume_ratio = market.volume_24h_usd / max(market.liquidity_usd, 1.0)
+        # Amplify price deviation by volume activity (surge validates the move)
+        momentum = price_deviation * (1 + min(volume_ratio, 2.0))
+        return min(momentum, 1.0)
 
     def _spread_percentile(self, market: MarketSnapshot) -> float:
         """Return the spread in bps as-is (lower is better for execution quality)."""
